@@ -12,34 +12,94 @@
 <details close>
 <summary><font size="+2">Ideas</font></summary>
 
-- Probabilistic Comparison:
-  - Implementation:
-    - parameters of distribution and specific loss (log loss?)
-    - try different distributions
-    - maybe try MonteCarlo
-  - Evaluation:
+- **Probabilistic** Comparison (Better interpretability and decision making):
+  - Ways to implement:
+    - parameters of distribution and specific loss (log loss?) -> try different distributions
+    - maybe try MonteCarlo (once turned probabilistic)
+  - How to perform Probabilistic Evaluation:
     - Interval (WIS, Coverage)
     - full distribution (CRPS, WRMSSE)
-- implement DMS (DLinear) method not IMS (DeepAR)
-  - DMS architecture based on DeepAR possible?
-- try CD over CI methods -> other evaluation benchmarks (like TSMixer)
+
+<br>
+
+- find a better way to utilize and combine the available information
+  - Hierarchical patching:
+    - use patching, but dynamically (and potentially series dependent):
+      - determine the patch length to match the frequency of the underlying time series (maybe via FFT?) -> then feed patches to CNN/RNN to summarize the series information and implement it to the prediction of the target time series (= utilize TimesBlock from TimesNet?) -> could also be combined with semi CD approach (only top k most influential time series considered)
+    - Patching with TSMixer -> Try out TSMixer while incorporating patching? (potentially on multiple levels like MTST)
+    - PatchMixer -> use hierarchical patching levels but similar architecture?
+    - Is Patching and MLP based architecture even reasonable? -> potentially loose out on some benefits of linear architecture (like modelling time-step dependent)
+  - Use traditional methods to additionally extract similarities, frequencies and more 
+
+<br>
+
+- Channel dependent methods -> need for other evaluation benchmarks (see TSMixer)
   - methods to capture cross-channel information
-    - CNN, RNN, ARIMA?
+    - CNN, RNN, ARIMA? (CNN/RNN in place of $MLP_{feat}$ of TSMixer)
     - maybe use CNN/RNN AR-methods for short term information and Transformer for long-term?
-  - CNN/RNN in place of $MLP_{feat}$ of TSMixer
-  - use patching, but dynamically (and potentially series dependent) determine the patch length to match the frequency of the underlying time series (maybe via FFT?) -> then feed patches to CNN/RNN to summarize the series information and implement it to the prediction of the target time series (= utilize TimesBlock from TimesNet?)
-  - maybe find a way to include a parameter $\lambda$ to trade-off between CI and CD, for example by ranking the time series at hand and then only allowing information to pass from the most related ones (This could also benefit the discussion of the datasets -> which datasets have many related time series). Also investigate this with patches -> learn which patches of other time series are important, based on patch time point atch length and considered time series
-- also consider auxiliary information -> again needs other benchmark than the standard (M5 like TSMixer)
+  - maybe include a parameter $\lambda$ to trade-off between CI and CD, for example by ranking the time series at hand and then only allowing information to pass from the most related ones (This could also benefit the discussion of the datasets -> which datasets have many related time series). Also investigate this with patches -> learn which patches of other time series are important, based on patch time point or patch length and considered time series
+    - LIFT (Zhao and Zhen, 2024) also calculates cross correlation coefficient, but then reduces to leading indicators -> maybe just use this to rank the correlation and then weight the influence accordingly/only choose a percentage of the other series to consider?
+
+<br>
+
+- Consider auxiliary information -> again needs other benchmark than the standard (M5 like TSMixer)
   - This is especially relevant for TST based models -> could try to add auxiliary information into these models
-  - look at how TiDE added auxiliary information into their model
-- based on MTST -> try Transformer-based models with different positional encodings
-- does MTST with residual connections between layers useful?
-- Patching with TSMixer -> Try out TSMixer while incorporating patching? (potentially on multiple levels like MTST)
-- PatchMixer -> use hierarchical patching levels but similar architecture?
-- also look into dual forecasting head design like in PatchMixer
-- train models with MAE compared to MSE, as it is more robust (according to Han et al. 2023)
-  - Look at PatchMixer ablation study of the Loss Function (tried out MAE+ MSE, MAE, MSE and SmoothL1loss) -> for them MAE w.r.t. MAE and MAE + MSE best w.r.t. MSE
-- Patching and MLP based architecture reasonable?
+  - look at how TiDE/TSMixer added auxiliary information into their model
+
+<br>
+
+- more implementation ideas:
+  - implement DMS method not IMS
+    - maybe DMS architecture based on DeepAR possible?
+  - based on MTST -> try Transformer-based models with different positional encodings
+  - (is MTST with residual connections between layers useful?)
+  - also look into dual forecasting head design like in PatchMixer
+  - train models with MAE compared to MSE, as it is more robust (according to Han et al. 2023)
+    - Look at PatchMixer ablation study of the Loss Function (tried out MAE+ MSE, MAE, MSE and SmoothL1loss) -> for them MAE w.r.t. MAE and MAE + MSE best w.r.t. MSE
+
+
+-----
+<br>
+
+<br>
+
+### Typology of time series models
+
+| Typology| Explanation| 
+|:--------------------------------------------|:---------------|
+| Direct multistep forecast|Forecast the horizon as a whole|
+| Iterative multistep forecast | Produce forecasts iteratively (often conditioned on previously produced forecasts)|
+| Univariate| Forecasting of a single time series|
+| Multivariate| Forecasting of multiple time series|
+| Global | Model shares parameters across different time series|
+| Local| Model parameters are specific per time series|
+| Channel independent | Solely consider information from one time series|
+| Channel dependent | Consider information from other time series|
+
+-----
+<br>
+
+<br>
+
+### Model summary 
+
+| Model + Paper                               | Local/global   | Univariate/Multivariate         | CD/CI                                                 | DMS/IMS         | Covariates|
+|:--------------------------------------------|:---------------|:--------------------|:---------------------------------------------------------------------|:-----------------------|:-------|
+| PatchTST Nie et al., 2023 | Global | Univariate |CI | DMS | No |
+| MTST Zhang et al. 2024 | Global | Univariate |CI | DMS | No |
+| TSMixer Chen et al., 2023 | Global | Multivariate | CD | DMS | Yes |
+| PatchMixer Gong et al., 2024 | Global | Univariate | CI | DMS | No |
+| TiDE Das et al., 2023 | Global | Univariate | CI | DMS | Yes |
+| TimesNet Wu et al., 2023  | Global | Multivariate (?) | CD (?) | DMS | No |
+| TimeMachine Ahamed et al., 2024 | Global | Univariate/Multivariate | CI/CD | DMS | No |
+| ModerTCN Luo et al.,2024  | Global | Multivariate | CD | DMS | No |
+| SDCNet Wang et al., 2023 | Global | Multivariate | CD | DMS | No |
+
+
+<br>
+
+<br>
+
 </details>
 
 <a id="gluonts"></a>
@@ -176,9 +236,9 @@ Introduction
 
 - according to Zhang (2023) and Nie (2023) time-stamp based tokens prevents attention mechanisms from effectively capturing temporal patterns.
 - but these patch-based methods do not explicitly incorporate multi-scale analysis, which has proved effective in many time-series modeling domains.
-- Therefore, in this work, we endow patch-based TSTs with the ability to learn multi-scale features with attention mechanisms via multi-resolution representations.
-- Unlike previous works that rely on subsampling, MTST constructs a multi-resolution representation by simply adjusting the patch-level tokenization of a time-series: a large number of small-sized patches leads to high-resolution feature maps; a small number of large-sized patches results in low-resolution feature maps. By constructing multiple sets of tokens with different patch-sizes, each MTST layer can model the temporal patterns of different frequencies simultaneously with multi-branch self-attentions
-- As shown in an example from the Electricity dataset (Figure 1), the role of the branch with larger-size patches is mostly to capture the  owerfrequency and coarser temporal patterns; the branch with smaller-size patches contributes to modeling the higher-frequency and finer temporal patterns.
+- Therefore, in this work, we endow patch-based TSTs with the ability to learn multi-scale features with attention mechanisms via multi-resolution representations.
+- Unlike previous works that rely on subsampling, MTST constructs a multi-resolution representation by simply adjusting the patch-level tokenization of a time-series: a large number of small-sized patches leads to high-resolution feature maps; a small number of large-sized patches results in low-resolution feature maps. By constructing multiple sets of tokens with different patch-sizes, each MTST layer can model the temporal patterns of different frequencies simultaneously with multi-branch self-attentions
+- As shown in an example from the Electricity dataset (Figure 1), the role of the branch with larger-size patches is mostly to capture the  owerfrequency and coarser temporal patterns; the branch with smaller-size patches contributes to modeling the higher-frequency and finer temporal patterns.
 
 ![](img/MTST/Fig1.png)
 
@@ -191,11 +251,11 @@ methodology
 - Each branch contains a tokenizer with unique patch sizes, that converts the input into patches, which are subsequently treated as tokens.
 - Then, Tokens in each branch undergo self-attention (SA) with relative positional encoding (RPE) and outputs from all branches in each layer are combined into a single embedding. This fused embedding serves as the input for the subsequent MTST layer.
 - **Channel Independent model**: following the protocol in the previous works (Zeng et al., 2023; Nie et al., 2023), MTST processes each x1:L,m  independently to generate the output xbL+1:L+T ,m, and subsequently combine them to form a multivariate forecast.
-- **BUT**: MTST is not limited by channelindependence and is readily extended to other patch-based TSTs that model dependencies among variates, such as the Crossformer (Zhang and Yan, 2023).
+- **BUT**: MTST is not limited by channelindependence and is readily extended to other patch-based TSTs that model dependencies among variates, such as the Crossformer (Zhang and Yan, 2023).
 
 Branch specific tokenization
 
-- Let $y^{(n-1)} \in R^{d_{n-1} \times 1}$ be the $d_{n−1}$-dimensional output representation of a univariate time-series at the (n−1)-th layer (Combined Output after each layer).
+- Let $y^{(n-1)} \in R^{d_{n-1} \times 1}$ be the $d_{n−1}$-dimensional output representation of a univariate time-series at the (n−1)-th layer (Combined Output after each layer).
 - The first output has $d_0$ = L, such that $y^{(0)} = x$ (= input x) & last output has $d_0$ = T, such that $y^{(N)} = \hat{x}$ (= prediction).
 - $b_n$-th branches patch length $P_{b_n}$ and stride $S_{b_n}$. Then Tokenizer: $$ T_{b_n}: R^{d_n \times 1}->R^{J_{b_n} \times P_{b_n}}$$ transforms previous output vector into $J_{b_n} = ...$ overlapping patches via sliding window approach.
 - branch patch length is shared across layers? -> each layer learns multiple representations (each branch) for each patch length -> How is the nubmer branches and consequently the specific patches determined?
@@ -212,13 +272,13 @@ relative positional encoding
 
 related works - multi-scale feature learning
 
-- Several recent time-series forecasting techniques have incorporated multi-scale analysis. NHiTS (Challu et al., 2022) introduces multi-rate signal sampling and hierarchical interpolation to model features at multiple granularities. MICN (Wang et al., 2023) incorporates convolution with different kernel sizes to learn multi-scale features. TimesNet (Wu et al., 2023) strives to capture the multi-periodicity in time-series by converting 1D sequences to a set of 2D tensors.Among transformer-based models, Pyraformer (Liu et al., 2021a) forms a multi-resolution representation via pyramidal attention. Scaleformer (Shabani et al., 2023) proposes a multi-resolution representation framework for existing timestamp-based TSTs via down/up-sampling.
+- Several recent time-series forecasting techniques have incorporated multi-scale analysis. NHiTS (Challu et al., 2022) introduces multi-rate signal sampling and hierarchical interpolation to model features at multiple granularities. MICN (Wang et al., 2023) incorporates convolution with different kernel sizes to learn multi-scale features. TimesNet (Wu et al., 2023) strives to capture the multi-periodicity in time-series by converting 1D sequences to a set of 2D tensors.Among transformer-based models, Pyraformer (Liu et al., 2021a) forms a multi-resolution representation via pyramidal attention. Scaleformer (Shabani et al., 2023) proposes a multi-resolution representation framework for existing timestamp-based TSTs via down/up-sampling.
 
 experiments
 
 ![](img/MTST/Tab2.png)
 
-- As a multi-scale convolution-based approach, MICN demonstrates competitive performance for small prediction horizons T, but encounters more severe performance degradation for larger T. This matches the observations in previous works that convolution-based models struggle to capture long-range dependencies. This motivates the development of Transformer-based models for long-term forecasting.
+- As a multi-scale convolution-based approach, MICN demonstrates competitive performance for small prediction horizons T, but encounters more severe performance degradation for larger T. This matches the observations in previous works that convolution-based models struggle to capture long-range dependencies. This motivates the development of Transformer-based models for long-term forecasting.
 
 ![](img/MTST/Tab6.png)
 
@@ -231,21 +291,21 @@ experiments
 
 abstract
 
-- patch-based Transformers showed good results -> But, Is the impressive performance of patch-based transformers primarily due to the use of patches rather than the transformer architecture itself?
+- patch-based Transformers showed good results -> But, Is the impressive performance of patch-based transformers primarily due to the use of patches rather than the transformer architecture itself?
 - introduce PatchMixer, a patch-based CNN with depthwise separable convolution
-- We also found that optimizing the patch embedding parameters and enhancing the objective function enables PatchMixer to better adapt to different datasets, thereby improving the generalization of the patch-based approach.
+- We also found that optimizing the patch embedding parameters and enhancing the objective function enables PatchMixer to better adapt to different datasets, thereby improving the generalization of the patch-based approach.
 
 introduction
 
 - in LTSF prevalent methods are usually Transformer or MLP-based, due to their global receptive field
 - CNNs only have a local receptive field (therefore maybe unsuitable for LTSF), however achieving similar results could highlight the importance of preprocessing
-- In this paper, we introduce a novel patch-based model known as PatchMixer. It is based on a depthwise separable convolutional module and distinguished by its “patchmixing” design, which (i) processes time series data in patches, retaining the sequential structure, and (ii) captures dependencies within and across variables through shared weights, emphasizing the role of patch-based preprocessing in striking a balance between efficiency and performance.
+- In this paper, we introduce a novel patch-based model known as PatchMixer. It is based on a depthwise separable convolutional module and distinguished by its “patchmixing” design, which (i) processes time series data in patches, retaining the sequential structure, and (ii) captures dependencies within and across variables through shared weights, emphasizing the role of patch-based preprocessing in striking a balance between efficiency and performance.
 
 The Patch-Mixing design
 
 - First the multivariate Time series is split into univariate ones -> **Channel Independent approach**
 - after splitting the series is divided into patches of length P (patch length) with overlap S (stride)
-- propose patch-mixing, which uses patching and channel independence to extract cross-patch temporal features.
+- propose patch-mixing, which uses patching and channel independence to extract cross-patch temporal features.
 - intra-varaible effects (right in Figure below) are more pronounced and hold significant mutual information in the main datasets
 ![](img/PatchMixer/Fig1.png.png)
 
@@ -253,7 +313,7 @@ The PatchMixer Model
 
 ![](img/PatchMixer/Fig2.png.png)
 
-- We employ a patch-based DWConv module called PatchMixer Block. This design holds efficient parameter usage while maintaining a wide receptive field via patch embedding. Besides, we also devise dual forecasting heads, ensuring a holistic feature representation.
+- We employ a patch-based DWConv module called PatchMixer Block. This design holds efficient parameter usage while maintaining a wide receptive field via patch embedding. Besides, we also devise dual forecasting heads, ensuring a holistic feature representation.
 
 PatchMixer Block
 
@@ -272,7 +332,7 @@ Ablation study:
 - results:
   - patch technique enhances performance across various dataset sizes
   - The convolutional module outperforms the attention mechanism across all datasets
-  - The linear head is more effective on small datasets, while the MLP head excels on larger ones; the dual-head combination provides balanced performance.
+  - The linear head is more effective on small datasets, while the MLP head excels on larger ones; the dual-head combination provides balanced performance.
 
 </details>
 
