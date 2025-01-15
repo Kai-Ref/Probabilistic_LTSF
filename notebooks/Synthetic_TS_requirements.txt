@@ -1,0 +1,127 @@
+anyio==4.8.0
+argon2-cffi==23.1.0
+argon2-cffi-bindings==21.2.0
+arrow==1.3.0
+asttokens==3.0.0
+async-lru==2.0.4
+attrs==24.3.0
+babel==2.16.0
+beautifulsoup4==4.12.3
+bleach==6.2.0
+certifi @ file:///home/conda/feedstock_root/build_artifacts/certifi_1734380492396/work/certifi
+cffi==1.17.1
+charset-normalizer==3.4.1
+colorama==0.4.6
+comm==0.2.2
+cycler @ file:///home/conda/feedstock_root/build_artifacts/cycler_1733332471406/work
+debugpy==1.8.11
+decorator==5.1.1
+defusedxml==0.7.1
+exceptiongroup==1.2.2
+executing==2.1.0
+fastjsonschema==2.21.1
+fqdn==1.5.1
+freezegun @ file:///home/conda/feedstock_root/build_artifacts/freezegun_1733301734273/work
+h11==0.14.0
+httpcore==1.0.7
+httpx==0.28.1
+idna==3.10
+importlib_metadata==8.5.0
+ipykernel==6.29.5
+ipython==8.18.1
+ipywidgets==8.1.5
+isoduration==20.11.0
+jedi==0.19.2
+Jinja2==3.1.5
+jplephem @ file:///home/conda/feedstock_root/build_artifacts/jplephem_1734349820189/work
+json5==0.10.0
+jsonpointer==3.0.0
+jsonschema==4.23.0
+jsonschema-specifications==2024.10.1
+jupyter==1.1.1
+jupyter-console==6.6.3
+jupyter-events==0.11.0
+jupyter-lsp==2.2.5
+jupyter_client==8.6.3
+jupyter_core==5.7.2
+jupyter_server==2.15.0
+jupyter_server_terminals==0.5.3
+jupyterlab==4.3.4
+jupyterlab_pygments==0.3.0
+jupyterlab_server==2.27.3
+jupyterlab_widgets==3.0.13
+kiwisolver @ file:///D:/bld/kiwisolver_1725459303250/work
+lunardate @ file:///home/conda/feedstock_root/build_artifacts/lunardate_1732053872201/work
+MarkupSafe==3.0.2
+matplotlib @ file:///D:/bld/matplotlib-suite_1605180431619/work
+matplotlib-inline==0.1.7
+mistune==3.1.0
+nbclient==0.10.2
+nbconvert==7.16.5
+nbformat==5.10.4
+nest-asyncio==1.6.0
+notebook==7.3.2
+notebook_shim==0.2.4
+numpy @ file:///D:/bld/numpy_1707225561314/work/dist/numpy-1.26.4-cp39-cp39-win_amd64.whl#sha256=af5f40857bb7ceb2d3be562fa763863d2f954c104873e89b8ee370f75e047ecf
+overrides==7.7.0
+packaging @ file:///home/conda/feedstock_root/build_artifacts/packaging_1733203243479/work
+pandas @ file:///D:/bld/pandas_1610610250254/work
+pandocfilters==1.5.1
+parso==0.8.4
+pillow @ file:///D:/bld/pillow_1735929718993/work
+platformdirs==4.3.6
+ply @ file:///home/conda/feedstock_root/build_artifacts/ply_1733239724146/work
+polars==1.19.0
+prometheus_client==0.21.1
+prompt_toolkit==3.0.48
+psutil==6.1.1
+pure_eval==0.2.3
+pyarrow==18.1.0
+pyCalverter @ file:///home/conda/feedstock_root/build_artifacts/pycalverter_1734358512623/work
+pycparser==2.22
+Pygments==2.19.1
+pyluach @ file:///home/conda/feedstock_root/build_artifacts/pyluach_1734809947337/work
+pyparsing @ file:///home/conda/feedstock_root/build_artifacts/pyparsing_1735698276679/work
+PyQt5==5.15.9
+PyQt5-sip @ file:///D:/bld/pyqt-split_1695417932202/work/pyqt_sip
+python-dateutil @ file:///home/conda/feedstock_root/build_artifacts/python-dateutil_1733215673016/work
+python-json-logger==3.2.1
+pytz @ file:///home/conda/feedstock_root/build_artifacts/pytz_1733215667876/work
+pywin32==308
+pywinpty==2.0.14
+PyYAML==6.0.2
+pyzmq==26.2.0
+referencing==0.35.1
+requests==2.32.3
+rfc3339-validator==0.1.4
+rfc3986-validator==0.1.1
+rpds-py==0.22.3
+scipy==1.13.1
+Send2Trash==1.8.3
+sgp4 @ file:///D:/bld/sgp4_1682617054766/work
+sip @ file:///D:/bld/sip_1697300548918/work
+six @ file:///home/conda/feedstock_root/build_artifacts/six_1733380938961/work
+skyfield @ file:///home/conda/feedstock_root/build_artifacts/skyfield_1718286549939/work
+skyfield-data @ file:///home/conda/feedstock_root/build_artifacts/skyfield-data_1735582394685/work
+sniffio==1.3.1
+soupsieve==2.6
+stack-data==0.6.3
+terminado==0.18.1
+timeseries-generator==0.1.0
+tinycss2==1.4.0
+toml @ file:///home/conda/feedstock_root/build_artifacts/toml_1734091811753/work
+tomli @ file:///home/conda/feedstock_root/build_artifacts/tomli_1733256695513/work
+tornado @ file:///D:/bld/tornado_1732615926917/work
+traitlets==5.14.3
+types-python-dateutil==2.9.0.20241206
+typing_extensions==4.12.2
+tzdata==2024.2
+uri-template==1.3.0
+urllib3==2.3.0
+wcwidth==0.2.13
+webcolors==24.11.1
+webencodings==0.5.1
+websocket-client==1.8.0
+widgetsnbextension==4.0.13
+workalendar @ file:///home/conda/feedstock_root/build_artifacts/workalendar_1614550877932/work
+zipp==3.21.0
