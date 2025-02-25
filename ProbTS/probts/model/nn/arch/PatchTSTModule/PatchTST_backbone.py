@@ -28,7 +28,7 @@ class PatchTST_backbone(nn.Module):
                  padding_var:Optional[int]=None, attn_mask:Optional[Tensor]=None, res_attention:bool=True, pre_norm:bool=False, store_attn:bool=False,
                  pe:str='zeros', learn_pe:bool=True, fc_dropout:float=0., head_dropout = 0, padding_patch = None,
                  pretrain_head:bool=False, head_type = 'flatten', individual = False, revin = True, affine = True, subtract_last = False,
-                 verbose:bool=False):
+                 verbose:bool=False, quantiles: list = [0.01, 0.05, 0.1, 0.2, 0.25, 0.4, 0.5, 0.6, 0.75, 0.8, 0.9, 0.95, 0.99]):
         
         super().__init__()
         
@@ -63,7 +63,11 @@ class PatchTST_backbone(nn.Module):
             self.head = self.create_pretrain_head(self.head_nf, c_in, fc_dropout) # custom head passed as a partial func with all its kwargs
         elif head_type == 'flatten': 
             self.head = Flatten_Head(self.individual, self.n_vars, self.head_nf, target_window, head_dropout=head_dropout)
-        
+        elif head_type == 'prob':
+            self.head = Prob_Head(self.individual, self.n_vars, self.head_nf, target_window, head_dropout=head_dropout)
+        elif head_type == 'quantile':
+            self.head = Quantile_Head(self.individual, self.n_vars, self.head_nf, target_window, quantiles, head_dropout=head_dropout)
+        self.head_type = head_type     
     
     def forward(self, z):                                                                   # z: [bs x nvars x seq_len]
         # norm
@@ -80,7 +84,13 @@ class PatchTST_backbone(nn.Module):
         
         # model
         z = self.backbone(z)                                                                # z: [bs x nvars x d_model x patch_num]
-        z = self.head(z)                                                                    # z: [bs x nvars x target_window] 
+        if self.head_type == 'prob':
+            mean, std = self.head(z)
+            return mean, std
+        elif self.head_type == 'quantile':
+            z = self.head(z) # probably revin possible for quantile regression
+        else:
+            z = self.head(z)                                                                    # z: [bs x nvars x target_window] 
         
         # denorm
         if self.revin: 
@@ -129,6 +139,108 @@ class Flatten_Head(nn.Module):
             x = self.linear(x)
             x = self.dropout(x)
         return x
+
+class Prob_Head(nn.Module):
+    def __init__(self, individual, n_vars, nf, target_window, head_dropout=0):
+        super().__init__()
+        
+        self.individual = individual
+        self.n_vars = n_vars
+        
+        if self.individual:
+            self.flattens = nn.ModuleList()
+            self.mean_linears = nn.ModuleList()
+            self.std_linears = nn.ModuleList()
+            self.dropouts = nn.ModuleList()
+            
+            for i in range(self.n_vars):
+                self.flattens.append(nn.Flatten(start_dim=-2))
+                self.mean_linears.append(nn.Linear(nf, target_window))
+                self.std_linears.append(nn.Linear(nf, target_window))
+                self.dropouts.append(nn.Dropout(head_dropout))
+        else:
+            self.flatten = nn.Flatten(start_dim=-2)
+            self.mean_linear = nn.Linear(nf, target_window)
+            self.std_linear = nn.Linear(nf, target_window)
+            self.dropout = nn.Dropout(head_dropout)
+        
+        # Softplus ensures standard deviation >0
+        self.softplus = nn.Softplus()
+
+    def forward(self, x):  # x: [bs x nvars x d_model x patch_num]
+        if self.individual:
+            mean_outs, std_outs = [], []
+            for i in range(self.n_vars):
+                z = self.flattens[i](x[:, i, :, :])  # [bs x (d_model * patch_num)]
+                mean = self.mean_linears[i](z)  # [bs x target_window]
+                std = self.softplus(self.std_linears[i](z)) + 1e-6
+                mean_outs.append(self.dropouts[i](mean))
+                std_outs.append(self.dropouts[i](std))
+            mean = torch.stack(mean_outs, dim=1)  # [bs x nvars x target_window]
+            std = torch.stack(std_outs, dim=1)    # [bs x nvars x target_window]
+        else:
+            z = self.flatten(x)  # [bs x (d_model * patch_num)]
+            mean = self.mean_linear(z)  # [bs x target_window]
+            std = self.softplus(self.std_linear(z)) + 1e-6
+            mean = self.dropout(mean)
+            std = self.dropout(std)
+        return mean, std  # Return both mean & std
+
+
+import torch
+import torch.nn as nn
+
+class Quantile_Head(nn.Module):
+    def __init__(self, individual, n_vars, nf, target_window, quantiles, head_dropout=0):
+        """
+        Quantile prediction head for forecasting.
+
+        Parameters:
+            individual (bool): Whether to use separate layers per variable.
+            n_vars (int): Number of variables (features).
+            nf (int): Input feature dimension.
+            target_window (int): Number of future time steps to predict.
+            quantiles (list): List of quantile levels to predict (e.g., [0.1, 0.5, 0.9]).
+            head_dropout (float): Dropout probability.
+        """
+        super().__init__()
+
+        self.individual = individual
+        self.n_vars = n_vars
+        self.num_quantiles = len(quantiles)
+        
+        if self.individual:
+            self.flattens = nn.ModuleList()
+            self.quantile_linears = nn.ModuleList()
+            self.dropouts = nn.ModuleList()
+            
+            for i in range(self.n_vars):
+                self.flattens.append(nn.Flatten(start_dim=-2))
+                self.quantile_linears.append(nn.Linear(nf, target_window * self.num_quantiles))  # Predict all quantiles
+                self.dropouts.append(nn.Dropout(head_dropout))
+        else:
+            self.flatten = nn.Flatten(start_dim=-2)
+            self.quantile_linear = nn.Linear(nf, target_window * self.num_quantiles)  # Shared linear layer
+            self.dropout = nn.Dropout(head_dropout)
+
+    def forward(self, x):  # x: [bs x nvars x d_model x patch_num]
+        if self.individual:
+            quantile_outs = []
+            for i in range(self.n_vars):
+                z = self.flattens[i](x[:, i, :, :])  # [bs x (d_model * patch_num)]
+                z = self.quantile_linears[i](z)  # [bs x (target_window * num_quantiles)]
+                z = self.dropouts[i](z)
+                z = z.view(z.shape[0], -1, self.num_quantiles)  # Reshape to [bs x target_window x num_quantiles]
+                quantile_outs.append(z)
+            x = torch.stack(quantile_outs, dim=1)  # [bs x nvars x target_window x num_quantiles]
+        else:
+            x = self.flatten(x)  # [bs x (d_model * patch_num)]
+            x = self.quantile_linear(x)  # [bs x (target_window * num_quantiles)]
+            x = self.dropout(x)
+            x = x.view(x.shape[0], self.n_vars, -1, self.num_quantiles)  # Reshape to [bs x nvars x target_window x num_quantiles]
+        
+        return x  # Shape: [bs x nvars x target_window x num_quantiles]
+
         
         
     

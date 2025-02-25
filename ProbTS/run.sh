@@ -1,5 +1,5 @@
 export CUDA_VISIBLE_DEVICES=0
-MODEL=patchtst
+MODEL=patchtst_prob
 DATASET=etth1
 CTX_LEN=96
 PRED_LEN=96

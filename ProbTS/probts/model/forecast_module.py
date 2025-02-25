@@ -8,7 +8,7 @@ import sys
 from probts.data import ProbTSBatchData
 from probts.data.data_utils.data_scaler import Scaler
 from probts.model.forecaster import Forecaster
-from probts.utils.evaluator import Evaluator
+from probts.utils.evaluator import Evaluator, Evaluator_q
 from probts.utils.metrics import *
 from probts.utils.save_utils import update_metrics, calculate_weighted_average, load_checkpoint, get_hor_str
 from probts.utils.utils import init_class_helper
@@ -61,7 +61,11 @@ class ProbTSForecastModule(pl.LightningModule):
             print("lr_scheduler config: ", self.scheduler_config)
         
         self.scaler = scaler
-        self.evaluator = Evaluator(quantiles_num=quantiles_num)
+        if getattr(self.forecaster, "head_type", "") == "quantile":
+            quantile_levels = [0.01, 0.05, 0.1, 0.2, 0.25, 0.4, 0.5, 0.6, 0.75, 0.8, 0.9, 0.95, 0.99]
+            self.evaluator = Evaluator_q(quantile_levels=quantile_levels)
+        else:
+            self.evaluator = Evaluator(quantiles_num=quantiles_num)
         
         # init the parapemetr for sampling
         self.sampling_weight_scheme = sampling_weight_scheme
@@ -103,9 +107,15 @@ class ProbTSForecastModule(pl.LightningModule):
         
         batch_data.past_target_cdf = self.scaler.transform(batch_data.past_target_cdf)
         forecasts = self.forecaster.forecast(batch_data, self.num_samples)[:,:, :pred_len]
-        
-        # Calculate denorm metrics
-        denorm_forecasts = self.scaler.inverse_transform(forecasts)
+
+        if getattr(self.forecaster, "head_type", "") == "quantile":
+            # Iterate over the quantiles to fix shape mismatches
+            denorm_forecasts = torch.stack([self.scaler.inverse_transform(forecasts[..., q])  # Apply scaling per quantile
+                                            for q in range(forecasts.shape[-1])  # Iterate over quantiles
+                                        ], dim=-1)
+        else:
+            # Normal inverse transform for non-quantile forecasts
+            denorm_forecasts = self.scaler.inverse_transform(forecasts)
         metrics = self.evaluator(orin_future_data, denorm_forecasts, past_data=orin_past_data, freq=self.forecaster.freq)
         self.metrics_dict = update_metrics(metrics, stage, target_dict=self.metrics_dict)
         
