@@ -6,6 +6,7 @@ from .r_square import masked_r2
 from .rmse import masked_rmse
 from .smape import masked_smape
 from .wape import masked_wape
+from .prob_metrics import *
 
 ALL_METRICS = {
             'MAE': masked_mae,
