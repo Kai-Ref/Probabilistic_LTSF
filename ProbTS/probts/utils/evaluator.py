@@ -203,7 +203,6 @@ class Evaluator_q:
         metrics["CRPS"] = np.mean(
             [metrics[self.weighted_loss_name(q)] for q in self.quantile_levels]
         )
-        
         metrics["MAE_Coverage"] = np.mean(
             [
                 np.abs(metrics[self.coverage_name(q)] - np.array([q]))
