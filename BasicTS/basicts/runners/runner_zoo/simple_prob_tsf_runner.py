@@ -1,0 +1,341 @@
+from typing import Dict, Optional, Tuple, Union
+import functools
+import torch
+import inspect
+
+from ..base_tsf_runner import BaseTimeSeriesForecastingRunner
+
+from easytorch.utils import master_only
+from torch.nn.parallel import DistributedDataParallel as DDP
+import os
+from easytorch.core.checkpoint import (backup_last_ckpt, clear_ckpt, load_ckpt,
+                                       save_ckpt)
+
+from ...metrics import (masked_mae, Evaluator)
+
+class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
+    """
+    A Simple Runner for Time Series Forecasting: 
+    Selects forward and target features. This runner is designed to handle most cases.
+
+    Args:
+        cfg (Dict): Configuration dictionary.
+    """
+
+    def __init__(self, cfg: Dict):
+        super().__init__(cfg)
+        self.forward_features = cfg['MODEL'].get('FORWARD_FEATURES', None)
+        self.target_features = cfg['MODEL'].get('TARGET_FEATURES', None)
+        self.target_time_series = cfg['MODEL'].get('TARGET_TIME_SERIES', None)
+
+        # self.quantiles = cfg['MODEL']['PARAM'].get('quantiles', None)
+        self.distribution_type = cfg['MODEL']['PARAM'].get('distribution_type', None)
+        print(self.distribution_type)
+
+
+    def preprocessing(self, input_data: Dict) -> Dict:
+        """Preprocess data.
+
+        Args:
+            input_data (Dict): Dictionary containing data to be processed.
+
+        Returns:
+            Dict: Processed data.
+        """
+
+        if self.scaler is not None:
+            input_data['target'] = self.scaler.transform(input_data['target'])
+            input_data['inputs'] = self.scaler.transform(input_data['inputs'])
+        # TODO: add more preprocessing steps as needed.
+        return input_data
+
+    def postprocessing(self, input_data: Dict) -> Dict:
+        """Postprocess data.
+
+        Args:
+            input_data (Dict): Dictionary containing data to be processed.
+
+        Returns:
+            Dict: Processed data.
+        """
+
+        # rescale data
+        if self.scaler is not None and self.scaler.rescale:
+            # TODO decide what to do with the std predictions -> ALso consider qunatiles.....
+
+            # Assuming the last dimension contains the mean and std predictions
+            mean_predictions = input_data['prediction'][..., 0]  # Mean is the first element in the last dimension
+            input_data['prediction'][..., 0] = self.scaler.inverse_transform(mean_predictions)
+            # input_data['prediction'] = self.scaler.inverse_transform(input_data['prediction'])
+            input_data['target'] = self.scaler.inverse_transform(input_data['target'])
+            input_data['inputs'] = self.scaler.inverse_transform(input_data['inputs'])
+
+        # subset forecasting
+        if self.target_time_series is not None:# for PatchTST at least it is NONE
+            input_data['target'] = input_data['target'][:, :, self.target_time_series, :]
+            input_data['prediction'] = input_data['prediction'][:, :, self.target_time_series, :]
+
+        # TODO: add more postprocessing steps as needed.
+        return input_data
+
+    def forward(self, data: Dict, epoch: int = None, iter_num: int = None, train: bool = True, **kwargs) -> Dict:
+        """
+        Performs the forward pass for training, validation, and testing. 
+
+        Args:
+            data (Dict): A dictionary containing 'target' (future data) and 'inputs' (history data) (normalized by self.scaler).
+            epoch (int, optional): Current epoch number. Defaults to None.
+            iter_num (int, optional): Current iteration number. Defaults to None.
+            train (bool, optional): Indicates whether the forward pass is for training. Defaults to True.
+
+        Returns:
+            Dict: A dictionary containing the keys:
+                  - 'inputs': Selected input features.
+                  - 'prediction': Model predictions.
+                  - 'target': Selected target features.
+
+        Raises:
+            AssertionError: If the shape of the model output does not match [B, L, N].
+        """
+
+        data = self.preprocessing(data)
+
+        # Preprocess input data
+        future_data, history_data = data['target'], data['inputs']
+        history_data = self.to_running_device(history_data)  # Shape: [B, L, N, C]
+        future_data = self.to_running_device(future_data)    # Shape: [B, L, N, C]
+        batch_size, length, num_nodes, _ = future_data.shape
+
+        # Select input features
+        history_data = self.select_input_features(history_data)
+        future_data_4_dec = self.select_input_features(future_data)
+
+        if not train:
+            # For non-training phases, use only temporal features
+            future_data_4_dec[..., 0] = torch.empty_like(future_data_4_dec[..., 0])
+
+        # Forward pass through the model
+        model_return = self.model(history_data=history_data, future_data=future_data_4_dec,
+                                  batch_seen=iter_num, epoch=epoch, train=train)
+
+        # Parse model return
+        if isinstance(model_return, torch.Tensor):
+            model_return = {'prediction': model_return}
+        if 'inputs' not in model_return:
+            model_return['inputs'] = self.select_target_features(history_data)
+        if 'target' not in model_return:
+            model_return['target'] = self.select_target_features(future_data)
+
+        # Ensure the output shape is correct
+        assert list(model_return['prediction'].shape)[:3] == [batch_size, length, num_nodes], \
+            "The shape of the output is incorrect. Ensure it matches [B, L, N, C]."
+
+        model_return = self.postprocessing(model_return)
+        return model_return
+
+    def select_input_features(self, data: torch.Tensor) -> torch.Tensor:
+        """
+        Selects input features based on the forward features specified in the configuration.
+
+        Args:
+            data (torch.Tensor): Input history data with shape [B, L, N, C1].
+
+        Returns:
+            torch.Tensor: Data with selected features with shape [B, L, N, C2].
+        """
+
+        if self.forward_features is not None:
+            data = data[:, :, :, self.forward_features]
+        return data
+
+    def select_target_features(self, data: torch.Tensor) -> torch.Tensor:
+        """
+        Selects target features based on the target features specified in the configuration.
+
+        Args:
+            data (torch.Tensor): Model prediction data with shape [B, L, N, C1].
+
+        Returns:
+            torch.Tensor: Data with selected target features and shape [B, L, N, C2].
+        """
+
+        data = data[:, :, :, self.target_features]
+        return data
+
+    def select_target_time_series(self, data: torch.Tensor) -> torch.Tensor:
+        """
+        Select target time series based on the target time series specified in the configuration.
+
+        Args:
+            data (torch.Tensor): Model prediction data with shape [B, L, N1, C].
+
+        Returns:
+            torch.Tensor: Data with selected target time series and shape [B, L, N2, C].
+        """
+
+        data = data[:, :, self.target_time_series, :]
+        return data
+
+    @master_only
+    def save_best_model(self, epoch: int, metric_name: str, greater_best: bool = True):
+        """Save the best model while training.
+
+        Examples:
+            >>> def on_validating_end(self, train_epoch: Optional[int]):
+            >>>     if train_epoch is not None:
+            >>>         self.save_best_model(train_epoch, 'val/loss', greater_best=False)
+
+        Args:
+            epoch (int): current epoch.
+            metric_name (str): metric name used to measure the model, must be registered in `epoch_meter`.
+            greater_best (bool, optional): `True` means greater value is best, such as `acc`
+                `False` means lower value is best, such as `loss`. Defaults to True.
+        """
+
+        metric = self.meter_pool.get_avg(metric_name)
+        best_metric = self.best_metrics.get(metric_name)
+        if best_metric is None or (metric > best_metric if greater_best else metric < best_metric):
+            self.best_metrics[metric_name] = metric
+            model = self.model.module if isinstance(self.model, DDP) else self.model
+            ckpt_dict = {
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optim_state_dict': self.optim.state_dict(),
+                'best_metrics': self.best_metrics
+            }
+            ckpt_path = os.path.join(
+                self.ckpt_save_dir,
+                '{}_best_{}.pt'.format(self.model_name, metric_name.replace('/', '_'))
+            )
+            save_ckpt(ckpt_dict, ckpt_path, self.logger)
+            self.current_patience = self.early_stopping_patience # reset patience
+        else:
+            if self.early_stopping_patience is not None:
+                self.current_patience -= 1
+
+    def metric_forward(self, metric_func, args: Dict) -> torch.Tensor:
+        """Compute metrics using the given metric function.
+
+        Args:
+            metric_func (function or functools.partial): Metric function.
+            args (Dict): Arguments for metrics computation.
+            TODO data (Dict): Data dictionary containing 'prediction' and 'target'.
+                only used for Evaluator to get the seasonal statistics.
+
+        Returns:
+            torch.Tensor: Computed metric value.
+        """
+
+        covariate_names = inspect.signature(metric_func).parameters.keys()
+        args = {k: v for k, v in args.items() if k in covariate_names}
+        if type(metric_func) is Evaluator:
+            if 'null_val' not in covariate_names:
+                args['null_val'] = self.null_val
+            metric_item = metric_func(**args)
+        elif isinstance(metric_func, functools.partial):
+            if 'null_val' not in metric_func.keywords and 'null_val' in covariate_names: # null_val is required but not provided
+                args['null_val'] = self.null_val
+            metric_item = metric_func(**args)
+        elif callable(metric_func):
+            if 'null_val' in covariate_names: # null_val is required
+                args['null_val'] = self.null_val
+            metric_item = metric_func(**args)
+        else:
+            raise TypeError(f'Unknown metric type: {type(metric_func)}')
+        return metric_item
+
+    def train_iters(self, epoch: int, iter_index: int, data: Union[torch.Tensor, Tuple]) -> torch.Tensor:
+        """Training iteration process.
+
+        Args:
+            epoch (int): Current epoch.
+            iter_index (int): Current iteration index.
+            data (Union[torch.Tensor, Tuple]): Data provided by DataLoader.
+
+        Returns:
+            torch.Tensor: Loss value.
+        """
+        iter_num = (epoch - 1) * self.iter_per_epoch + iter_index
+        forward_return = self.forward(data=data, epoch=epoch, iter_num=iter_num, train=True)
+
+        if self.cl_param:
+            cl_length = self.curriculum_learning(epoch=epoch)
+            forward_return['prediction'] = forward_return['prediction'][:, :cl_length, :, :]
+            forward_return['target'] = forward_return['target'][:, :cl_length, :, :]
+        loss = self.metric_forward(self.loss, forward_return)
+        self.update_epoch_meter('train/loss', loss.item())
+        for metric_name, metric_func in self.metrics.items():
+            # below increases train time by 5 sec per epoch if metric == Evaluator
+            metric_item = self.metric_forward(metric_func, forward_return)
+            if type(metric_func) is Evaluator:
+                for key, value in metric_item.items():
+                    try:
+                        self.update_epoch_meter(f'ProbTS-train/{key}', value)
+                    except KeyError:
+                        self.register_epoch_meter(f'ProbTS-train/{key}', 'train', '{:.4f}')
+                        self.update_epoch_meter(f'ProbTS-train/{key}', value)
+            else:
+                self.update_epoch_meter(f'train/{metric_name}', metric_item.item())
+        return loss
+
+    def val_iters(self, iter_index: int, data: Union[torch.Tensor, Tuple]):
+        """Validation iteration process.
+
+        Args:
+            iter_index (int): Current iteration index.
+            data (Union[torch.Tensor, Tuple]): Data provided by DataLoader.
+        """
+
+        forward_return = self.forward(data=data, epoch=None, iter_num=iter_index, train=False)
+        loss = self.metric_forward(self.loss, forward_return)
+        self.update_epoch_meter('val/loss', loss.item())
+
+        for metric_name, metric_func in self.metrics.items():
+            metric_item = self.metric_forward(metric_func, forward_return)
+            if type(metric_func) is Evaluator:
+                for key, value in metric_item.items():
+                    try:
+                        self.update_epoch_meter(f'ProbTS-val/{key}', value)
+                    except KeyError:
+                        self.register_epoch_meter(f'ProbTS-val/{key}', 'val', '{:.4f}')
+                        self.update_epoch_meter(f'ProbTS-val/{key}', value)
+            else:
+                self.update_epoch_meter(f'val/{metric_name}', metric_item.item())
+
+    def compute_evaluation_metrics(self, returns_all: Dict):
+        """Compute metrics for evaluating model performance during the test process.
+
+        Args:
+            returns_all (Dict): Must contain keys: inputs, prediction, target.
+        """
+
+        metrics_results = {}
+        for i in self.evaluation_horizons:
+            pred = returns_all['prediction'][:, i, :, :]
+            real = returns_all['target'][:, i, :, :]
+
+            metrics_results[f'horizon_{i + 1}'] = {}
+            metric_repr = ''
+            for metric_name, metric_func in self.metrics.items():
+                if metric_name.lower() == 'mase':
+                    continue # MASE needs to be calculated after all horizons
+                metric_item = self.metric_forward(metric_func, {'prediction': pred, 'target': real})
+                metric_repr += f', Test {metric_name}: {metric_item.item():.4f}'
+                metrics_results[f'horizon_{i + 1}'][metric_name] = metric_item.item()
+            self.logger.info(f'Evaluate best model on test data for horizon {i + 1}{metric_repr}')
+
+        metrics_results['overall'] = {}
+        for metric_name, metric_func in self.metrics.items():
+            metric_item = self.metric_forward(metric_func, returns_all)
+            if type(metric_func) is Evaluator:
+                for key, value in metric_item.items():
+                    try:
+                        self.update_epoch_meter(f'ProbTS-test/{key}', value)
+                    except KeyError:
+                        self.register_epoch_meter(f'ProbTS-test/{key}', 'test', '{:.4f}')
+                        self.update_epoch_meter(f'ProbTS-test/{key}', value)
+                    metrics_results['overall']['ProbTS-{key}'] = value
+            else:
+                self.update_epoch_meter(f'test/{metric_name}', metric_item.item())
+                metrics_results['overall'][metric_name] = metric_item.item()
+        return metrics_results

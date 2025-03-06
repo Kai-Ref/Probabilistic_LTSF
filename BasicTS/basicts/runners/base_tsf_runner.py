@@ -394,7 +394,6 @@ class BaseTimeSeriesForecastingRunner(BaseEpochRunner):
             metric_item = self.metric_forward(metric_func, returns_all)
             self.update_epoch_meter(f'test/{metric_name}', metric_item.item())
             metrics_results['overall'][metric_name] = metric_item.item()
-
         return metrics_results
 
     @torch.no_grad()

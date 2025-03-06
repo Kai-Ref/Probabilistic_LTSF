@@ -6,7 +6,8 @@ from .r_square import masked_r2
 from .rmse import masked_rmse
 from .smape import masked_smape
 from .wape import masked_wape
-from .prob_metrics import *
+from .prob_metrics import gaussian_nll_loss, crps
+from .probts import smape, Evaluator
 
 ALL_METRICS = {
             'MAE': masked_mae,
@@ -16,7 +17,9 @@ ALL_METRICS = {
             'WAPE': masked_wape,
             'SMAPE': masked_smape,
             'R2': masked_r2,
-            'CORR': masked_corr
+            'CORR': masked_corr,
+            'NLL': gaussian_nll_loss,
+            'CRPS': crps
             }
 
 __all__ = [
@@ -28,5 +31,7 @@ __all__ = [
     'masked_smape',
     'masked_r2',
     'masked_corr',
+    'gaussian_nll_loss',
+    'crps',
     'ALL_METRICS'
 ]
