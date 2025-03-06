@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import torch
 import logging
 from tqdm import tqdm
+from scipy.stats import norm
 
 def init(model, dataset, no_logging=False):
     if no_logging:
@@ -59,7 +60,7 @@ def get_predictions(runner, data_loader="test"):
         dataloader = runner.train_data_loader
     model = runner.model
     model.eval()  # Ensure model is in eval mode
-    device = 'cpu'
+    device = 'cuda:0'
     model.to(device)  # Move to appropriate device
     predictions = []
     past_actuals = []
@@ -69,7 +70,13 @@ def get_predictions(runner, data_loader="test"):
         for batch_idx, batch in tqdm(enumerate(dataloader)):
             history = batch['inputs'][..., :1]     # B, L, N -> i.e. ignore the remaining features
             targets = batch['target'][..., :1]
-            forecasts = model(batch['inputs'][..., :1].to(device), batch['target'].to(device), batch_seen=0, epoch=0, train=False)
+            
+            # TODO scaler
+            model_return = runner.forward(batch, epoch=100, iter_num=100, train=False)
+            #forecasts = model(batch['inputs'][..., :1].to(device), batch['target'].to(device), batch_seen=0, epoch=0, train=False)
+            history = model_return['inputs']
+            targets = model_return['target']
+            forecasts = model_return['prediction']
             
             history, targets, forecasts = history.to('cpu'), targets.to('cpu'), forecasts.to('cpu') 
             future_actuals.append(targets)
@@ -115,9 +122,20 @@ def plot_time_series(past_actuals, future_actuals, predictions, windows, series,
                     upper_bound = predictions[window, :, serie, quantile_levels.index(ci[1])]
                     median_pred = predictions[window, :, serie, quantile_levels.index(0.5)]
                 else:# non quantile prob forecast -> need to calculate the quantiles first
-                    lower_bound = np.percentile(predictions[window, :, :, serie], ci[0], axis=0)
-                    upper_bound = np.percentile(predictions[window, :, :, serie], ci[1], axis=0)
-                    median_pred = np.percentile(predictions[window, :, :, serie], 50, axis=0)
+                    # Extract mean and std
+                    median_pred = predictions[window, :, serie, 0]  # Shape: [num_time_steps]
+                    std = predictions[window, :, serie, 1]   # Shape: [num_time_steps]
+                    
+                    # Create a grid of x values
+                    #x = range(predictions.shape[1])
+                    # Compute the PDFs for all time steps at once
+                    #pdfs = norm.pdf(x, loc=median_pred, scale=std)  # Shape: [num_points, num_time_steps]
+                    
+                    #ax.plot(x, pdfs)#label=[f"Time Step {t+1} (μ={mean[t]}, σ={std[t]})" for t in range(predictions.shape[0])])
+                    
+                    lower_bound = median_pred + 2*std #np.percentile(predictions[window, :, :, serie], ci[0], axis=0)
+                    upper_bound = median_pred - 2*std #np.percentile(predictions[window, :, :, serie], ci[1], axis=0)
+                    #median_pred = np.percentile(predictions[window, :, :, serie], 50, axis=0)
     
                 pred_range = range(len(past_actuals[window]), len(past_actuals[window]) + len(median_pred))
                 ax.fill_between(pred_range, lower_bound, upper_bound, color='red', alpha=0.3, label=f"{ci[0]}-{ci[1]}% CI")
