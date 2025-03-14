@@ -13,6 +13,8 @@ import numpy as np
 from gluonts.time_feature import get_seasonality
 import torch.distributions as dist
 import torch
+from prob.prob_head import ProbabilisticHead # load that class for sampling
+
 
 def mse_old(target: np.ndarray, forecast: np.ndarray) -> float:
     r"""
@@ -236,6 +238,7 @@ class Evaluator:
         self.ignore_invalid_values = True
         self.smooth = smooth
         self.distribution_type = distribution_type
+        self.prob_head = ProbabilisticHead(1, 1, self.distribution_type)
 
         self.__all_metrics__ = ["MSE", "abs_error", "abs_target_sum", "abs_target_mean",
                                 "MAPE", "sMAPE", "MASE", "RMSE", "NRMSE", "ND", "weighted_ND",
@@ -246,6 +249,8 @@ class Evaluator:
             # check that the provided metrics are valid
             assert all([m in self.__all_metrics__ for m in self.metrics]) 
             self.metrics = metrics
+        
+        distributions = ["gaussian","laplace","student_t","lognormal","beta","gamma","weibull","poisson","negative_binomial","dirichlet"]
 
         # depending if the distribution is quantile or not, we need to set the sample flag
         if self.distribution_type in ["quantile", "i_quantile"]:
@@ -253,9 +258,9 @@ class Evaluator:
             self.loss_name = self.loss_name
             self.weighted_loss_name = self.weighted_loss_name
             self.coverage_name = self.coverage_name
-        elif self.distribution_type in ["gaussian", "laplace"]:
+        elif self.distribution_type in distributions:
             self.sample = True
-        else: # for point forecasts, compute the percentiles
+        else: #TODO for point forecasts, compute the percentiles
             self.sample = False
 
     def loss_name(self, q):
@@ -345,7 +350,6 @@ class Evaluator:
         # Convert targets and forecasts to PyTorch tensors
         targets = torch.tensor(targets).clone().detach()
         forecasts = torch.tensor(forecasts).clone().detach()
-        
         # handle the different scenarios, e.g if forecasts are aggregated or not
         dim = [1, 2] if targets.dim() == 3 else [1]
         
@@ -403,22 +407,7 @@ class Evaluator:
     def selected_metrics(self):
         return [ "ND",'weighted_ND', 'CRPS', "NRMSE", "MSE"] #, "MASE"]
 
-    def sample_forecasts(self, prediction, num_samples=100):
-        if self.distribution_type == "gaussian":
-            mus = prediction[..., 0]
-            sigmas = prediction[..., 1]
-            # samples = torch.normal(mus, sigmas)
-            dist_normal = dist.Normal(mus, sigmas)
-            samples = dist_normal.rsample((num_samples,))  # [samples x bs x seq_len x nvars]
-            # return samples.permute(1, 0, 2, 3)  # [Batch, Samples, Target Length, Target Dim]
-            return samples
-        elif self.distribution_type == "laplace":
-            mus = prediction[..., 0]
-            sigmas = prediction[..., 1]
-            samples = torch.distributions.laplace.Laplace(mus, sigmas).sample()
-        # now insert into forecasts
-
-    def __call__(self, prediction: torch.Tensor, target: torch.Tensor, null_val: float = np.nan):
+    def __call__(self, prediction: torch.Tensor, target: torch.Tensor, model, null_val: float = np.nan):
         #targets, forecasts, past_data, freq, loss_weights=None):
         """
 
@@ -441,24 +430,26 @@ class Evaluator:
         # mask = mask.float()
         # mask /= torch.mean((mask))
         # mask = torch.where(torch.isnan(mask), torch.zeros_like(mask), mask)
-        if self.distribution_type == "gaussian":
-            # reshape targets from [bs x seq_len x nvars x 1] into [bs x seq_len x nvars]
-            target = target.squeeze(-1) # [bs x seq_len x nvars]
+
+        # TODO other distribution samples
+        # if self.distribution_type == "gaussian":
+        #     # reshape targets from [bs x seq_len x nvars x 1] into [bs x seq_len x nvars]
+        #     target = target.squeeze(-1) # [bs x seq_len x nvars]
 
         if self.sample:
-            prediction = self.sample_forecasts(prediction)   # [samples x bs x seq_len x nvars]
+            target = target.squeeze(-1)
+            prediction = self.prob_head.sample(prediction, num_samples=100) # [samples x bs x seq_len x nvars]
             prediction = prediction.permute(1, 0, 2, 3)       # [bs x samples x seq_len x nvars]
         else:
             # reshape prediction from [bs x nvars x seq_len x num_params/quantiles] into [bs x num_params/quantiles x seq_len x nvars]
             prediction = prediction.permute(1, 0, 2, 3)     # [bs x num_quantiles x seq_len x nvars]
-            prediction = prediction.squeeze()
+            prediction = prediction.squeeze(-1)
         
         # TODO: MASE and seasonal error calculation
         # past_data = process_tensor(past_data)
         # seasonal_error = calculate_seasonal_error(past_data, freq)
         seasonal_error = None
         loss_weights = None
-
         metrics = self.get_metrics(target, prediction, seasonal_error=seasonal_error, samples_dim=1, loss_weights=loss_weights)
         metrics_sum = self.get_metrics(target.sum(axis=-1), prediction.sum(axis=-1), samples_dim=1)
         

@@ -7,6 +7,8 @@ from .Embed import DataEmbedding_inverted
 import numpy as np
 from basicts.utils import data_transformation_4_xformer
 
+from prob.prob_head import ProbabilisticHead
+
 class iTransformer(nn.Module):
     """
     Paper: iTransformer: Inverted Transformers Are Effective for Time Series Forecasting
@@ -33,6 +35,7 @@ class iTransformer(nn.Module):
         self.activation = model_args['activation']
         self.e_layers = model_args['e_layers']
         self.d_layers = model_args['d_layers']
+        self.head_type = model_args['head_type']
 
         self.use_norm =model_args['use_norm']
         # Embedding
@@ -54,7 +57,12 @@ class iTransformer(nn.Module):
             ],
             norm_layer=torch.nn.LayerNorm(self.d_model)
         )
-        self.projector = nn.Linear(self.d_model, self.pred_len, bias=True)
+        if self.head_type == 'probabilistic':
+            self.distribution_type = model_args['distribution_type']
+            self.quantiles = model_args['quantiles']
+            self.projector = ProbabilisticHead(self.d_model, self.pred_len, self.distribution_type, self.quantiles)
+        else:
+            self.projector = nn.Linear(self.d_model, self.pred_len, bias=True)
 
     def forward_xformer(self, x_enc: torch.Tensor, x_mark_enc: torch.Tensor, x_dec: torch.Tensor,
                         x_mark_dec: torch.Tensor,
@@ -82,13 +90,33 @@ class iTransformer(nn.Module):
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
 
         # B N E -> B N S -> B S N
-        dec_out = self.projector(enc_out).permute(0, 2, 1)[:, :, :N]  # filter the covariates
-
-        if self.use_norm:
-            # De-Normalization from Non-stationary Transformer
-            dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.pred_len, 1))
-            dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.pred_len, 1))
-
+        if self.head_type == 'probabilistic':
+            dec_out = self.projector(enc_out).permute(0, 2, 1, 3)[:, :, :N, :] # bs x seq_len x num_series x num_params
+            if self.use_norm:
+                if self.distribution_type in ["gaussian", "laplace"]:
+                    # For Gaussian distribution with mean and std parameters
+                    # Only denormalize the mean parameter (typically at index 0)
+                    pred_means = dec_out[:, :, :, 0]
+                    pred_means = pred_means * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.pred_len, 1))
+                    pred_means = pred_means + (means[:, 0, :].unsqueeze(1).repeat(1, self.pred_len, 1))
+                    dec_out[:, :, :, 0] = pred_means
+                    
+                    # For standard deviation parameter, you need to scale it by the original stdev
+                    # but don't add the mean (assuming second parameter is std)
+                    pred_stds = dec_out[:, :, :, 1]
+                    pred_stds = pred_stds * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.pred_len, 1))
+                    dec_out[:, :, :, 1] = pred_stds
+                else: # for example quantile forecasts
+                    # filter by dec_out[:, :self.pred_len, :, :] -> because i_quantile has +1 shape for the quantile levels
+                    dec_out[:, :self.pred_len, :, :] = dec_out[:, :self.pred_len, :, :] * (stdev[:, 0, :].unsqueeze(1).unsqueeze(-1).repeat(1, self.pred_len, 1, dec_out.shape[-1]))
+                    dec_out[:, :self.pred_len, :, :] = dec_out[:, :self.pred_len, :, :] + (means[:, 0, :].unsqueeze(1).unsqueeze(-1).repeat(1, self.pred_len, 1, dec_out.shape[-1]))
+        else:
+            dec_out = self.projector(enc_out).permute(0, 2, 1)[:, :, :N]  # filter the covariates
+            if self.use_norm:
+                # De-Normalization from Non-stationary Transformer
+                dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.pred_len, 1))
+                dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.pred_len, 1))
+                dec_out = dec_out.unsqueeze(-1) # was originally in forward return prediction.unsqueeze(-1)
         return dec_out
 
     def forward(self, history_data: torch.Tensor, future_data: torch.Tensor, batch_seen: int, epoch: int, train: bool,
@@ -108,4 +136,4 @@ class iTransformer(nn.Module):
                                                                              start_token_len=0)
         #print(x_mark_enc.shape, x_mark_dec.shape)
         prediction = self.forward_xformer(x_enc=x_enc, x_mark_enc=x_mark_enc, x_dec=x_dec, x_mark_dec=x_mark_dec)
-        return prediction.unsqueeze(-1)
+        return prediction

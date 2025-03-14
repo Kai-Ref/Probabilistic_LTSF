@@ -2,8 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# from .distributions import Gaussian
-from prob.prob_head import ProbabilisticHead
+from .distributions import Gaussian
 
 
 class DeepAR(nn.Module):
@@ -18,8 +17,7 @@ class DeepAR(nn.Module):
     Task: Probabilistic Time Series Forecasting
     """
 
-    def __init__(self, cov_feat_size, embedding_size, hidden_size, num_layers, use_ts_id, 
-                id_feat_size=0, num_nodes=0, distribution_type="gaussian", quantiles=None,) -> None:
+    def __init__(self, cov_feat_size, embedding_size, hidden_size, num_layers, use_ts_id, id_feat_size=0, num_nodes=0) -> None:
         """Init DeepAR.
 
         Args:
@@ -46,44 +44,20 @@ class DeepAR(nn.Module):
         # the LSTM layer
         self.encoder = nn.LSTM(embedding_size+cov_feat_size+id_feat_size, hidden_size, num_layers, bias=True, batch_first=True)
         # the likelihood function
-        self.distribution_type = distribution_type
-        self.quantiles = quantiles
-        self.prob_head = ProbabilisticHead(hidden_size, 1, distribution_type=self.distribution_type, quantiles=self.quantiles) #Gaussian(hidden_size, 1)
+        self.likelihood_layer = Gaussian(hidden_size, 1)
 
-    def _sample_from_head(self, head_output, hidden_output=None):
-        """Sample from the probabilistic head based on distribution type"""
-        if self.distribution_type == "gaussian":
-            # Extract mean and std from head output
-            mu = head_output[..., 0]
-            sigma = head_output[..., 1]
-            # Sample from Gaussian
-            gaussian = torch.distributions.Normal(mu, sigma)
-            sample = gaussian.sample()
-            
-        elif self.distribution_type == "laplace":
-            # Extract location and scale from head output
-            loc = head_output[..., 0]
-            scale = head_output[..., 1]
-            # Sample from Laplace
-            laplace = torch.distributions.Laplace(loc, scale)
-            sample = laplace.sample()
-            
-        elif self.distribution_type == "quantile":
-            # For quantile regression, use the median (50% quantile) as point forecast
-            median_idx = self.quantiles.index(0.5) if 0.5 in self.quantiles else len(self.quantiles) // 2
-            sample = head_output[..., median_idx]
-            
-        elif self.distribution_type == "i_quantile":
-            raise NotImplementedError # -> Need to decide how to choose sample during training/where the quantile values can be arbitrary... -> try to reiterate for the 0.5 quantile?
-            # For implicit quantile regression during training,
-            # the prediction is already included in head_output
-            if self.training:
-                sample = head_output[..., 0]  # Just use the prediction without the tau
-            else:
-                # During inference, find the prediction for the median quantile
-                median_idx = len(self.prob_head.quantiles) // 2
-                sample = head_output[..., median_idx]
-        return sample
+    def gaussian_sample(self, mu, sigma):
+        """Sampling.
+
+        Args:
+            mu (torch.Tensor): mean values of distributions.
+            sigma (torch.Tensor): std values of distributions.
+        """
+        mu = mu.squeeze(1)
+        sigma = sigma.squeeze(1)
+        gaussian = torch.distributions.Normal(mu, sigma)
+        ypred = gaussian.sample([1]).squeeze(0)
+        return ypred
 
     def forward(self, history_data: torch.Tensor, future_data: torch.Tensor, train: bool, **kwargs) -> torch.Tensor:
         """Feed forward of DeepAR.
@@ -95,8 +69,9 @@ class DeepAR(nn.Module):
             train (bool): is training or not.
         """
         history_next = None
-        samples = []
-        dist_params = []
+        preds = []
+        mus = []
+        sigmas = []
         len_in, len_out = history_data.shape[1], future_data.shape[1]
         B, _, N, C = history_data.shape
         input_feat_full = torch.cat([history_data[:, :, :, 0:1], future_data[:, :, :, 0:1]], dim=1) # B, L_in+L_out, N, 1
@@ -116,21 +91,17 @@ class DeepAR(nn.Module):
             B, _, N, C = encoder_input.shape # _ is 1
             encoder_input = encoder_input.transpose(1, 2).reshape(B * N, -1, C)
             _, (h, c) = self.encoder(encoder_input) if t == 1 else self.encoder(encoder_input, (h, c))
-
             # distribution proj
-            head_output = self.prob_head(F.relu(h[-1, :, :]))
-            dist_params.append(head_output.view(B, N, -1).unsqueeze(1))
-            sample = self.prob_head.sample(head_output) #self._sample_from_head(head_output, None)
-            history_next = sample.view(B, N).view(B, 1, N, 1)
-            # print(head_output.view(B, N, -1).unsqueeze(1).shape)
-            #history_next = self.gaussian_sample(mu, sigma).view(B, N).view(B, 1, N, 1)
-            #mus.append(mu.view(B, N, 1).unsqueeze(1))
-            #sigmas.append(sigma.view(B, N, 1).unsqueeze(1))
-            samples.append(history_next)
+            mu, sigma = self.likelihood_layer(F.relu(h[-1, :, :]))
+            history_next = self.gaussian_sample(mu, sigma).view(B, N).view(B, 1, N, 1)
+            mus.append(mu.view(B, N, 1).unsqueeze(1))
+            sigmas.append(sigma.view(B, N, 1).unsqueeze(1))
+            preds.append(history_next)
             assert not torch.isnan(history_next).any()
 
-        samples = torch.concat(samples, dim=1)
-        #TODO also try to return the full prediction horizon and optimize it on that
-        params = torch.concat(dist_params, dim=1)[:, -len_out:, :, :]
-        #reals = input_feat_full[:, -params.shape[1]:, :, :]
-        return params # {"prediction": params, }#"target": reals,}# "mus": mus, "sigmas": sigmas}
+        preds = torch.concat(preds, dim=1)
+        mus = torch.concat(mus, dim=1)
+        sigmas = torch.concat(sigmas, dim=1)
+        reals = input_feat_full[:, -preds.shape[1]:, :, :]
+
+        return {"prediction": preds, "target": reals, "mus": mus, "sigmas": sigmas}

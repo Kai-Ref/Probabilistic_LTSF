@@ -6,7 +6,7 @@ import torch
 from typing import Optional
 from scipy.integrate import quad
 from scipy.stats import norm
-
+import torch.distributions as dist
 
 
 
@@ -165,7 +165,7 @@ def quantile_loss(prediction: torch.Tensor, target: torch.Tensor, quantiles, nul
     #loss = loss * mask  # Shape: [64, 96, 7, 1]
     return loss.mean()
 
-def quantile_loss_old(prediction: torch.Tensor, target: torch.Tensor, quantiles, null_val: float = np.nan):
+def quantile_loss_old(prediction: torch.Tensor, target: torch.Tensor, quantiles: list, null_val: float = np.nan):
     """
     Computes the quantile loss for multiple quantiles.
 
@@ -193,25 +193,23 @@ def quantile_loss_old(prediction: torch.Tensor, target: torch.Tensor, quantiles,
         losses.append(loss.mean())  # Average over all samples
     return torch.mean(torch.stack(losses))  # Average across all quantiles
 
-def gaussian_nll_loss(prediction: torch.Tensor, target: torch.Tensor, null_val: float = np.nan): #prediction: torch.Tensor, target: torch.Tensor, std: torch.Tensor, reduction: str = 'mean') -> torch.Tensor:
+def nll_loss(prediction: torch.Tensor, target: torch.Tensor, distribution_type: str, null_val: float = np.nan): #prediction: torch.Tensor, target: torch.Tensor, std: torch.Tensor, reduction: str = 'mean') -> torch.Tensor:
     """
-    Calculate the Negative Log-Likelihood (NLL) loss for Gaussian distributions.
+    Generalized Negative Log-Likelihood (NLL) Loss for different probabilistic distributions.
 
     Args:
-        prediction (torch.Tensor): The predicted mean values as a tensor.
-        target (torch.Tensor): The ground truth values as a tensor with the same shape as `prediction`.
-        std (torch.Tensor): The predicted standard deviation values as a tensor with the same shape as `prediction`.
-        reduction (str, optional): Specifies the reduction to apply to the output: 'none' | 'mean' | 'sum'.
-            'mean': the sum of the output will be divided by the number of elements in the output.
-            'sum': the output will be summed.
-            'none': no reduction will be applied. Defaults to 'mean'.
+        prediction (torch.Tensor): The predicted distribution parameters.
+        target (torch.Tensor): The ground truth values.
+        distribution_type (str): The type of distribution (e.g., 'gaussian', 'laplace', 'poisson', etc.).
+        null_val (float, optional): The value representing missing values in `target`. Defaults to NaN.
 
     Returns:
-        torch.Tensor: The NLL loss.
+        torch.Tensor: The computed NLL loss.
 
     Note:
         Taken from gaussian.py of DeepAR.
     """
+    target = target.squeeze(-1)
     if np.isnan(null_val):
         mask = ~torch.isnan(target)
     else:
@@ -221,14 +219,58 @@ def gaussian_nll_loss(prediction: torch.Tensor, target: torch.Tensor, null_val: 
     mask /= torch.mean((mask))
     mask = torch.where(torch.isnan(mask), torch.zeros_like(mask), mask)
 
-    # Ensure std is positive
-    mus = prediction[..., 0].unsqueeze(-1)              # [bs x nvars x seq_len x 1]
-    sigmas = prediction[..., 1].unsqueeze(-1)           # [bs x nvars x seq_len x 1]
-    sigmas = torch.clamp(sigmas, min=1e-6)
-
-
-    distribution = torch.distributions.Normal(mus, sigmas)
-    likelihood = distribution.log_prob(target)
-    likelihood = likelihood * mask
-    loss_g = -torch.mean(likelihood)
-    return loss_g
+    # 2. Compute Negative Log-Likelihood (NLL) for each distribution
+    if distribution_type == "gaussian":
+        mu, sigma = prediction[..., 0], prediction[..., 1]
+        sigma = torch.clamp(sigma, min=1e-6)  # Ensure std > 0
+        distribution = dist.Normal(mu, sigma)
+    elif distribution_type == "laplace":
+        loc, scale = prediction[..., 0], prediction[..., 1]
+        scale = torch.clamp(scale, min=1e-6)
+        distribution = dist.Laplace(loc, scale)
+    elif distribution_type == "student_t":
+        mu, sigma, df = prediction[..., 0], prediction[..., 1], prediction[..., 2]
+        sigma = torch.clamp(sigma, min=1e-6)
+        df = torch.clamp(df, min=1.1)  # Ensure degrees of freedom > 1
+        distribution = dist.StudentT(df, mu, sigma)
+    elif distribution_type == "lognormal":
+        mu, sigma = prediction[..., 0], prediction[..., 1]
+        sigma = torch.clamp(sigma, min=1e-6)
+        distribution = dist.LogNormal(mu, sigma)
+    elif distribution_type == "beta":
+        alpha, beta = prediction[..., 0], prediction[..., 1]
+        alpha = torch.clamp(alpha, min=1e-6)
+        beta = torch.clamp(beta, min=1e-6)
+        distribution = dist.Beta(alpha, beta)
+    elif distribution_type == "gamma":
+        shape, rate = prediction[..., 0], prediction[..., 1]
+        shape = torch.clamp(shape, min=1e-6)
+        rate = torch.clamp(rate, min=1e-6)
+        distribution = dist.Gamma(shape, rate)
+    elif distribution_type == "weibull":
+        scale, concentration = prediction[..., 0], prediction[..., 1]
+        scale = torch.clamp(scale, min=1e-6)
+        concentration = torch.clamp(concentration, min=1e-6)
+        distribution = dist.Weibull(scale, concentration)
+    elif distribution_type == "poisson":
+        rate = prediction[..., 0]
+        rate = torch.clamp(rate, min=1e-6)
+        distribution = dist.Poisson(rate)
+    elif distribution_type == "negative_binomial":
+        rate, dispersion = prediction[..., 0], prediction[..., 1]
+        rate = torch.clamp(rate, min=1e-6)
+        dispersion = torch.clamp(dispersion, min=1e-6)
+        probs = rate / (rate + dispersion)  # Convert to success probability
+        distribution = dist.NegativeBinomial(total_count=dispersion, probs=probs)
+    elif distribution_type == "dirichlet":
+        concentration = prediction
+        concentration = torch.clamp(concentration, min=1e-6)
+        distribution = dist.Dirichlet(concentration)
+    else:
+        raise ValueError(f"Unsupported distribution type: {distribution_type}")
+    log_likelihood = distribution.log_prob(target)
+    # 3. Apply mask and return loss
+    log_likelihood = log_likelihood * mask
+    loss = -torch.mean(log_likelihood)
+    
+    return loss

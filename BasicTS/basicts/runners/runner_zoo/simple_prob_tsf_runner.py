@@ -2,6 +2,7 @@ from typing import Dict, Optional, Tuple, Union
 import functools
 import torch
 import inspect
+from tqdm import tqdm
 
 from ..base_tsf_runner import BaseTimeSeriesForecastingRunner
 
@@ -31,6 +32,9 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
         # self.quantiles = cfg['MODEL']['PARAM'].get('quantiles', None)
         self.distribution_type = cfg['MODEL']['PARAM'].get('distribution_type', None)
         self.quantiles = cfg['MODEL']['PARAM'].get('quantiles', None)
+        self.output_seq_len = cfg["DATASET"]["PARAM"]["output_len"]
+        self.model_name = cfg["MODEL"]["NAME"]
+        print(self.model_name)
 
 
     def preprocessing(self, input_data: Dict) -> Dict:
@@ -66,9 +70,10 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
             # Assuming the last dimension contains the mean and std predictions
             # mean_predictions = input_data['prediction'][..., 0]  # Mean is the first element in the last dimension
             # input_data['prediction'][..., 0] = self.scaler.inverse_transform(mean_predictions)
-            # if self.dsitribution_type == 'gaussian'
-            input_data['prediction'] = self.scaler.inverse_transform(input_data['prediction'], gaussian=True)
-
+            if self.dsitribution_type == 'gaussian':
+                input_data['prediction'] = self.scaler.inverse_transform(input_data['prediction'], gaussian=True)
+            else:
+                input_data['prediction'] = self.scaler.inverse_transform(input_data['prediction'], gaussian=False)
             # input_data['prediction'] = self.scaler.inverse_transform(input_data['prediction'])
             input_data['target'] = self.scaler.inverse_transform(input_data['target'])
             input_data['inputs'] = self.scaler.inverse_transform(input_data['inputs'])
@@ -121,7 +126,7 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
         model_return = self.model(history_data=history_data, future_data=future_data_4_dec,
                                 batch_seen=iter_num, epoch=epoch, train=train)
 
-        if model_return.shape[1] != length: #self.distribution_type == 'i_quantile':
+        if (model_return.shape[1] != length) and (self.distribution_type == 'i_quantile'):
             quantiles = model_return[:, -1:, :, :].squeeze()
             model_return = model_return[:, :-1, :, :]
 
@@ -243,14 +248,17 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
         if type(metric_func) is Evaluator:
             if 'null_val' not in covariate_names:
                 args['null_val'] = self.null_val
+            args['model'] = self.model
             metric_item = metric_func(**args)
         elif isinstance(metric_func, functools.partial):
             if 'null_val' not in metric_func.keywords and 'null_val' in covariate_names: # null_val is required but not provided
                 args['null_val'] = self.null_val
             metric_item = metric_func(**args)
         elif callable(metric_func):
-            if 'quantiles' not in list(args.keys()):
+            if ('quantile_loss' in str(metric_func)) and ('quantiles' not in list(args.keys())):
                 args['quantiles'] = self.quantiles
+            if 'nll_loss' in str(metric_func):
+                args['distribution_type'] = self.distribution_type
             if 'null_val' in covariate_names: # null_val is required
                 args['null_val'] = self.null_val
             metric_item = metric_func(**args)
@@ -305,7 +313,7 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
         loss = self.metric_forward(self.loss, forward_return)
         self.update_epoch_meter('val/loss', loss.item())
 
-        for metric_name, metric_func in self.metrics.items():
+        for metric_name, metric_func in self.metrics.items():            
             metric_item = self.metric_forward(metric_func, forward_return)
             if type(metric_func) is Evaluator:
                 for key, value in metric_item.items():
@@ -354,3 +362,60 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
                 self.update_epoch_meter(f'test/{metric_name}', metric_item.item())
                 metrics_results['overall'][metric_name] = metric_item.item()
         return metrics_results
+
+
+
+    @torch.no_grad()
+    @master_only
+    def test(self, train_epoch: Optional[int] = None, save_metrics: bool = False, save_results: bool = False) -> Dict:
+        """Test process.
+        
+        Args:
+            train_epoch (Optional[int]): Current epoch if in training process.
+            save_metrics (bool): Save the test metrics. Defaults to False.
+            save_results (bool): Save the test results. Defaults to False.
+        """
+
+        prediction, target, inputs = [], [], []
+
+        for data in tqdm(self.test_data_loader):
+            forward_return = self.forward(data, epoch=None, iter_num=None, train=False)
+
+            loss = self.metric_forward(self.loss, forward_return)
+            self.update_epoch_meter('test/loss', loss.item())
+
+            if not self.if_evaluate_on_gpu:
+                forward_return['prediction'] = forward_return['prediction'].detach().cpu()
+                forward_return['target'] = forward_return['target'].detach().cpu()
+                forward_return['inputs'] = forward_return['inputs'].detach().cpu()
+
+            prediction.append(forward_return['prediction'])
+            target.append(forward_return['target'])
+            inputs.append(forward_return['inputs'])
+
+        prediction = torch.cat(prediction, dim=0)
+        target = torch.cat(target, dim=0)
+        inputs = torch.cat(inputs, dim=0)
+        
+        # if self.model_name == 'DeepAR': # taken from DeepAR_Runner
+        #     returns_all = {'prediction': prediction[:, -self.output_seq_len:, :, :],
+        #                 'target': target[:, -self.output_seq_len:, :, :],
+        #                 'inputs': inputs}
+        # else:
+        returns_all = {'prediction': prediction, 'target': target, 'inputs': inputs}
+        
+        
+        metrics_results = self.compute_evaluation_metrics(returns_all)
+
+        # save
+        if save_results:
+            # save returns_all to self.ckpt_save_dir/test_results.npz
+            test_results = {k: v.cpu().numpy() for k, v in returns_all.items()}
+            np.savez(os.path.join(self.ckpt_save_dir, 'test_results.npz'), **test_results)
+
+        if save_metrics:
+            # save metrics_results to self.ckpt_save_dir/test_metrics.json
+            with open(os.path.join(self.ckpt_save_dir, 'test_metrics.json'), 'w') as f:
+                json.dump(metrics_results, f, indent=4)
+
+        return returns_all

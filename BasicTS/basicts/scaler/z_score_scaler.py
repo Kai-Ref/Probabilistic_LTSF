@@ -100,7 +100,7 @@ class ZScoreScaler(BaseScaler):
         std = self.std.to(input_data.device)
         # Clone the input data to prevent in-place modification (which is not allowed in PyTorch)
         input_data = input_data.clone()
-        if gaussian:
+        if gaussian:#TODO also handle quantile normalization, i think this only normalizes the first channel...
             input_data[..., 0] = input_data[..., 0] * std + mean
             input_data[..., 1] = input_data[..., 1] * std
         else:
