@@ -30,7 +30,7 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
 
         # self.quantiles = cfg['MODEL']['PARAM'].get('quantiles', None)
         self.distribution_type = cfg['MODEL']['PARAM'].get('distribution_type', None)
-        print(self.distribution_type)
+        self.quantiles = cfg['MODEL']['PARAM'].get('quantiles', None)
 
 
     def preprocessing(self, input_data: Dict) -> Dict:
@@ -64,8 +64,11 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
             # TODO decide what to do with the std predictions -> ALso consider qunatiles.....
 
             # Assuming the last dimension contains the mean and std predictions
-            mean_predictions = input_data['prediction'][..., 0]  # Mean is the first element in the last dimension
-            input_data['prediction'][..., 0] = self.scaler.inverse_transform(mean_predictions)
+            # mean_predictions = input_data['prediction'][..., 0]  # Mean is the first element in the last dimension
+            # input_data['prediction'][..., 0] = self.scaler.inverse_transform(mean_predictions)
+            # if self.dsitribution_type == 'gaussian'
+            input_data['prediction'] = self.scaler.inverse_transform(input_data['prediction'], gaussian=True)
+
             # input_data['prediction'] = self.scaler.inverse_transform(input_data['prediction'])
             input_data['target'] = self.scaler.inverse_transform(input_data['target'])
             input_data['inputs'] = self.scaler.inverse_transform(input_data['inputs'])
@@ -116,7 +119,11 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
 
         # Forward pass through the model
         model_return = self.model(history_data=history_data, future_data=future_data_4_dec,
-                                  batch_seen=iter_num, epoch=epoch, train=train)
+                                batch_seen=iter_num, epoch=epoch, train=train)
+
+        if model_return.shape[1] != length: #self.distribution_type == 'i_quantile':
+            quantiles = model_return[:, -1:, :, :].squeeze()
+            model_return = model_return[:, :-1, :, :]
 
         # Parse model return
         if isinstance(model_return, torch.Tensor):
@@ -126,9 +133,14 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
         if 'target' not in model_return:
             model_return['target'] = self.select_target_features(future_data)
 
+        if self.distribution_type == 'i_quantile':
+            if 'quantiles' in locals(): 
+                model_return['quantiles'] = quantiles
+            else:
+                model_return['quantiles'] = self.quantiles
         # Ensure the output shape is correct
         assert list(model_return['prediction'].shape)[:3] == [batch_size, length, num_nodes], \
-            "The shape of the output is incorrect. Ensure it matches [B, L, N, C]."
+            f"The shape of the output is incorrect. Ensure it matches [B, L, N, C]. Current {list(model_return['prediction'].shape)[:3]} != {[batch_size, length, num_nodes]}"
 
         model_return = self.postprocessing(model_return)
         return model_return
@@ -237,6 +249,8 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
                 args['null_val'] = self.null_val
             metric_item = metric_func(**args)
         elif callable(metric_func):
+            if 'quantiles' not in list(args.keys()):
+                args['quantiles'] = self.quantiles
             if 'null_val' in covariate_names: # null_val is required
                 args['null_val'] = self.null_val
             metric_item = metric_func(**args)
@@ -265,7 +279,8 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
         loss = self.metric_forward(self.loss, forward_return)
         self.update_epoch_meter('train/loss', loss.item())
         for metric_name, metric_func in self.metrics.items():
-            # below increases train time by 5 sec per epoch if metric == Evaluator
+            if "Val_Evaluator" in metric_name:
+                continue
             metric_item = self.metric_forward(metric_func, forward_return)
             if type(metric_func) is Evaluator:
                 for key, value in metric_item.items():

@@ -248,7 +248,7 @@ class Evaluator:
             self.metrics = metrics
 
         # depending if the distribution is quantile or not, we need to set the sample flag
-        if self.distribution_type == "quantile":
+        if self.distribution_type in ["quantile", "i_quantile"]:
             self.sample = False
             self.loss_name = self.loss_name
             self.weighted_loss_name = self.weighted_loss_name
@@ -343,8 +343,8 @@ class Evaluator:
     def get_metrics(self, targets, forecasts, seasonal_error=None, samples_dim=1, loss_weights=None):
         metrics = {}
         # Convert targets and forecasts to PyTorch tensors
-        targets = torch.tensor(targets)
-        forecasts = torch.tensor(forecasts)
+        targets = torch.tensor(targets).clone().detach()
+        forecasts = torch.tensor(forecasts).clone().detach()
         
         # handle the different scenarios, e.g if forecasts are aggregated or not
         dim = [1, 2] if targets.dim() == 3 else [1]
@@ -441,23 +441,23 @@ class Evaluator:
         # mask = mask.float()
         # mask /= torch.mean((mask))
         # mask = torch.where(torch.isnan(mask), torch.zeros_like(mask), mask)
-
-        # reshape targets from [bs x seq_len x nvars x 1] into [bs x seq_len x nvars]
-        target = target.squeeze(-1) # [bs x seq_len x nvars]
+        if self.distribution_type == "gaussian":
+            # reshape targets from [bs x seq_len x nvars x 1] into [bs x seq_len x nvars]
+            target = target.squeeze(-1) # [bs x seq_len x nvars]
 
         if self.sample:
             prediction = self.sample_forecasts(prediction)   # [samples x bs x seq_len x nvars]
             prediction = prediction.permute(1, 0, 2, 3)       # [bs x samples x seq_len x nvars]
         else:
             # reshape prediction from [bs x nvars x seq_len x num_params/quantiles] into [bs x num_params/quantiles x seq_len x nvars]
-            prediction = prediction.permute(0, 3, 2, 1)     # [bs x num_quantiles x seq_len x nvars]
+            prediction = prediction.permute(1, 0, 2, 3)     # [bs x num_quantiles x seq_len x nvars]
+            prediction = prediction.squeeze()
         
         # TODO: MASE and seasonal error calculation
         # past_data = process_tensor(past_data)
         # seasonal_error = calculate_seasonal_error(past_data, freq)
         seasonal_error = None
         loss_weights = None
-
 
         metrics = self.get_metrics(target, prediction, seasonal_error=seasonal_error, samples_dim=1, loss_weights=loss_weights)
         metrics_sum = self.get_metrics(target.sum(axis=-1), prediction.sum(axis=-1), samples_dim=1)

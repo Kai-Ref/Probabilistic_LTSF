@@ -1,6 +1,50 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
+import os 
+os.chdir("/home/kreffert/Probabilistic_LTSF/ProbTS")
+from probts.data import ProbTSBatchData
+
+def get_predictions_1(cli):
+    test_dataloader = cli.datamodule.test_dataloader()
+    model = cli.model
+    model.eval()  # Ensure model is in eval mode
+    device = 'cpu'
+    model.to(device)  # Move to appropriate device
+    mean_predictions = []
+    std_predictions = []
+    past_actuals = []
+    future_actuals = []
+    
+    with torch.no_grad():
+        for batch_idx, batch in enumerate(test_dataloader):
+            batch = {key: val.to(device) for key, val in batch.items()}  # Move batch to device
+            # Extract past actual values
+            past_values = batch["past_target_cdf"].cpu()  # Shape: (batch_size, past_seq_len)
+            print(past_values.shape)
+            past_actuals.append(past_values)
+    
+            # Extract future actual values
+            future_values = batch["future_target_cdf"].cpu()  # Shape: (batch_size, future_seq_len)
+            future_actuals.append(future_values)
+            print(future_values.shape)
+    
+            # Store predictions
+            #samples_forecast = model.predict_step(batch, batch_idx)
+            batch_data = ProbTSBatchData(batch, device)
+            mean_forecast, std_forecast = cli.model.forecaster.forecast(batch_data, num_samples=None)
+            print(mean_forecast.shape)
+            mean_forecast = mean_forecast.squeeze(1)
+            std_forecast = std_forecast.squeeze(1)
+            mean_predictions.append(mean_forecast.cpu())
+            std_predictions.append(std_forecast.cpu())
+    
+    # Convert to numpy if needed
+    mean_predictions = torch.cat(mean_predictions, dim=0).numpy()
+    std_predictions = torch.cat(std_predictions, dim=0).numpy()
+    past_actuals = torch.cat(past_actuals, dim=0).numpy()
+    future_actuals = torch.cat(future_actuals, dim=0).numpy()
+    return mean_predictions, std_predictions, past_actuals, future_actuals
 
 def get_predictions(cli):
     test_dataloader = cli.datamodule.test_dataloader()
@@ -26,7 +70,9 @@ def get_predictions(cli):
             print(future_values.shape)
     
             # Store predictions
-            forecast = model.predict_step(batch, batch_idx)
+            #forecast = model.predict_step(batch, batch_idx)
+            batch_data = ProbTSBatchData(batch, device)
+            forecast = cli.model.forecaster.forecast(batch_data, num_samples=None)
             print(forecast.shape)
             forecast = forecast.squeeze(1)
             predictions.append(forecast.cpu())

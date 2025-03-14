@@ -718,8 +718,8 @@ class BaseEpochRunner(metaclass=ABCMeta):
                 in :attr:`state_dict` match the keys returned by this module's
                 :meth:`~torch.nn.Module.state_dict` function. Default: ``True``
         """
-
         try:
+            self.logger.info('Load model from : {}'.format(ckpt_path))
             checkpoint_dict = load_ckpt(self.ckpt_save_dir, ckpt_path=ckpt_path, logger=self.logger)
             if isinstance(self.model, DDP):
                 self.model.module.load_state_dict(checkpoint_dict['model_state_dict'], strict=strict)
@@ -742,6 +742,7 @@ class BaseEpochRunner(metaclass=ABCMeta):
         """
 
         try:
+            self.logger.info('Load model from : {}'.format(self.ckpt_save_dir))
             checkpoint_dict = load_ckpt(self.ckpt_save_dir, logger=self.logger)
             if isinstance(self.model, DDP):
                 self.model.module.load_state_dict(checkpoint_dict['model_state_dict'], strict=strict)

@@ -25,7 +25,7 @@ class PatchTST(nn.Module):
                  attn_mask:Optional[Tensor]=None, res_attention:bool=True, 
                  pre_norm:bool=False, store_attn:bool=False, pe:str='zeros',
                  learn_pe:bool=True, pretrain_head:bool=False, head_type = 'flatten',
-                 verbose:bool=False, distribution_type="gaussian", num_quantiles=None, **kwargs):
+                 verbose:bool=False, distribution_type="gaussian", quantiles=None, **kwargs):
     
         super().__init__()
 
@@ -86,7 +86,7 @@ class PatchTST(nn.Module):
                                   attn_mask=attn_mask, res_attention=res_attention, pre_norm=pre_norm, store_attn=store_attn,
                                   pe=pe, learn_pe=learn_pe, fc_dropout=fc_dropout, head_dropout=head_dropout, padding_patch = padding_patch,
                                   pretrain_head=pretrain_head, head_type=head_type, individual=individual, revin=revin, affine=affine,
-                                  subtract_last=subtract_last, verbose=verbose, distribution_type=distribution_type, num_quantiles=num_quantiles, **kwargs)
+                                  subtract_last=subtract_last, verbose=verbose, distribution_type=distribution_type, quantiles=quantiles, **kwargs)
 
 
     def forward(self, history_data: torch.Tensor, future_data: torch.Tensor, batch_seen: int, epoch: int, train: bool, **kwargs) -> torch.Tensor:

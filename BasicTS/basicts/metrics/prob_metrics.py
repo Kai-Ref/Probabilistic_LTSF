@@ -23,7 +23,7 @@ def _normpdf(x):
 
 # Standard normal cumulative distribution function (CDF)
 def _normcdf(x):
-    return torch.tensor(special.ndtr(x), dtype=x.dtype, device=x.device)
+    return torch.tensor(special.ndtr(x), dtype=x.dtype, device=x.device).clone().detach()
 
 def crps(prediction: torch.Tensor, target: torch.Tensor, null_val: float = np.nan) -> torch.Tensor:
     """
@@ -124,6 +124,74 @@ def crps_old(prediction: torch.Tensor, target: torch.Tensor, null_val: float = n
     crps_values_masked = crps_values * mask_flat
     mean_crps = torch.mean(crps_values_masked)
     return mean_crps
+
+def quantile_loss(prediction: torch.Tensor, target: torch.Tensor, quantiles, null_val: float = np.nan):
+    """
+    If quantiles are given as a list, the function assumes the predictions to encompass all quantile levels.
+    If quantiles are given as a tensor, they are matched with the predictions shape, allowing for quantile level predictions that differ across batch elements.
+
+    Parameters:
+        y_pred (torch.Tensor): Predicted quantile values, shape [bs x n_vars x target_window x 1].
+        y_true (torch.Tensor): Ground truth values, shape [bs x n_vars x target_window].
+        quantiles (list or torch.Tensor): List of quantiles (e.g., [0.1, 0.5, 0.9]).
+
+    Returns:
+        torch.Tensor: Scalar loss value.
+    """
+    if np.isnan(null_val):
+        mask = ~torch.isnan(target)
+    else:
+        eps = 5e-5
+        mask = ~torch.isclose(target, torch.tensor(null_val).expand_as(target).to(target.device), atol=eps, rtol=0.)
+    mask = mask.float()
+    mask /= torch.mean((mask))
+    mask = torch.where(torch.isnan(mask), torch.zeros_like(mask), mask)
+
+    if isinstance(quantiles, list):
+        quantiles = torch.tensor(quantiles) # Shape: [num_quantiles]
+
+        # Dynamically get `num_quantiles` from list length
+        num_quantiles = quantiles.shape[0]
+
+        # Get dimensions from `prediction` or `target`
+        batch_size, _, time_steps, _ = prediction.shape  # Extract dimensions dynamically
+
+        # Reshape and expand quantiles without hardcoding
+        quantiles = quantiles.view(1, 1, 1, num_quantiles).expand(batch_size, 1, time_steps, num_quantiles).to(prediction.device) # Shape: [64, 1, 7, num_quantiles]
+    else:
+        quantiles = quantiles.unsqueeze(1).unsqueeze(-1)  # Shape: [64, 1, 7, 1]
+    errors = target - prediction  # Shape: [64, 96, 7, 1]
+    loss = torch.max(quantiles * errors, (quantiles - 1) * errors)  # Shape: [64, 96, 7, 1]
+    #loss = loss * mask  # Shape: [64, 96, 7, 1]
+    return loss.mean()
+
+def quantile_loss_old(prediction: torch.Tensor, target: torch.Tensor, quantiles, null_val: float = np.nan):
+    """
+    Computes the quantile loss for multiple quantiles.
+
+    Parameters:
+        y_pred (torch.Tensor): Predicted quantile values, shape [bs x n_vars x target_window x num_quantiles].
+        y_true (torch.Tensor): Ground truth values, shape [bs x n_vars x target_window].
+        quantiles (list): List of quantiles (e.g., [0.1, 0.5, 0.9]).
+
+    Returns:
+        torch.Tensor: Scalar loss value.
+    """
+    if np.isnan(null_val):
+        mask = ~torch.isnan(target)
+    else:
+        eps = 5e-5
+        mask = ~torch.isclose(target, torch.tensor(null_val).expand_as(target).to(target.device), atol=eps, rtol=0.)
+    mask = mask.float()
+    mask /= torch.mean((mask))
+    mask = torch.where(torch.isnan(mask), torch.zeros_like(mask), mask)
+    losses = []
+    for i, q in enumerate(quantiles):
+        errors = target[..., 0] - prediction[..., i]  # Compute residuals (true - predicted)
+        loss = torch.max(q * errors, (q - 1) * errors)  # Pinball loss per quantile
+        #loss_masked = loss * mask
+        losses.append(loss.mean())  # Average over all samples
+    return torch.mean(torch.stack(losses))  # Average across all quantiles
 
 def gaussian_nll_loss(prediction: torch.Tensor, target: torch.Tensor, null_val: float = np.nan): #prediction: torch.Tensor, target: torch.Tensor, std: torch.Tensor, reduction: str = 'mean') -> torch.Tensor:
     """
