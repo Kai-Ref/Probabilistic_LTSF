@@ -7,36 +7,11 @@ from typing import Optional
 from scipy.integrate import quad
 from scipy.stats import norm
 import torch.distributions as dist
+import functools
+from prob.prob_head import ProbabilisticHead 
+import scoringrules as sr
 
-
-
-# The following is taken from properscoring
-# See: https://github.com/properscoring/properscoring/blob/master/properscoring/_crps.py
-
-import scipy.special as special
-# Normalization constant for standard Gaussian PDF
-_normconst = 1.0 / np.sqrt(2.0 * np.pi)
-
-def _normpdf(x):
-    """Standard normal probability density function (PDF)."""
-    return _normconst * torch.exp(-(x * x) / 2.0)
-
-# Standard normal cumulative distribution function (CDF)
-def _normcdf(x):
-    return torch.tensor(special.ndtr(x), dtype=x.dtype, device=x.device).clone().detach()
-
-def crps(prediction: torch.Tensor, target: torch.Tensor, null_val: float = np.nan) -> torch.Tensor:
-    """
-    Compute the CRPS for a Gaussian distribution.
-
-    Parameters:
-    - prediction: Tensor of shape [batch_size, n_vars, seq_len, 2] containing mean & std.
-    - target: Tensor of shape [batch_size, n_vars, seq_len] with observed values.
-    - null_val: Value representing missing or invalid data. Default is NaN.
-
-    Returns:
-    - A scalar tensor representing the CRPS loss.
-    """
+def crps(prediction: torch.Tensor, target: torch.Tensor, distribution_type:str, null_val: float = np.nan):
     target = target.clone().squeeze(-1).detach().cpu()
     # Handle missing values
     if np.isnan(null_val):
@@ -48,32 +23,71 @@ def crps(prediction: torch.Tensor, target: torch.Tensor, null_val: float = np.na
     mask /= torch.mean(mask)
     mask = torch.where(torch.isnan(mask), torch.zeros_like(mask), mask)
 
-    # Extract mean and standard deviation from prediction
-    mu = prediction[..., 0].detach().cpu()  # Mean
-    sig = prediction[..., 1].detach().cpu()  # Standard deviation
-    sig = torch.clamp(sig, min=1e-6)
+    prediction = prediction.detach().cpu()
+    # 2. Compute Negative Log-Likelihood (NLL) for each distribution
+    if distribution_type == "gaussian":
+        mu, sigma = prediction[..., 0], prediction[..., 1]
+        sigma = torch.clamp(sigma, min=1e-6)  # Ensure std > 0
+        score = sr.crps_normal(target, mu, sigma)
+    elif distribution_type == "laplace":
+        loc, scale = prediction[..., 0], prediction[..., 1]
+        scale = torch.clamp(scale, min=1e-6)
+        score = sr.crps_laplace(target, loc, scale)
+    elif distribution_type == "student_t":
+        mu, sigma, df = prediction[..., 0], prediction[..., 1], prediction[..., 2]
+        sigma = torch.clamp(sigma, min=1e-6)
+        df = torch.clamp(df, min=1.1)  # Ensure degrees of freedom > 1
+        score = sr.crps_t(target, df, mu, sigma)
+    elif distribution_type == "lognormal":
+        mu, sigma = prediction[..., 0], prediction[..., 1]
+        sigma = torch.clamp(sigma, min=1e-6)
+        score = sr.crps_lognormal(target, mu, sigma)
+    elif distribution_type == "beta":
+        alpha, beta = prediction[..., 0], prediction[..., 1]
+        alpha = torch.clamp(alpha, min=1e-6)
+        beta = torch.clamp(beta, min=1e-6)
+        score = sr.crps_beta(target, alpha, beta)
+    elif distribution_type == "gamma":
+        shape, rate = prediction[..., 0], prediction[..., 1]
+        shape = torch.clamp(shape, min=1e-6)
+        rate = torch.clamp(rate, min=1e-6)
+        score = sr.crps_gamma(target, shape, rate)
+    elif distribution_type == "poisson":
+        rate = prediction[..., 0]
+        rate = torch.clamp(rate, min=1e-6)
+        score = sr.crps_poisson(target, rate)
+    elif distribution_type == "negative_binomial":
+        rate, dispersion = prediction[..., 0], prediction[..., 1]
+        rate = torch.clamp(rate, min=1e-6)
+        dispersion = torch.clamp(dispersion, min=1e-6)
+        probs = rate / (rate + dispersion)  # Convert to success probability
+        score = sr.crps_negbinom(target, dispersion, prob=probs)
+    elif distribution_type in ["weibull", "dirichlet"]: #TODO -> resort to empirical crps
+        return empirical_crps(prediction, target, distribution_type, null_val=null_val)
+    else:
+        return empirical_crps(prediction, target, distribution_type, null_val=null_val)
+        # raise ValueError(f"Unsupported distribution type: {distribution_type}")
+    return np.mean(score)
 
-    # Compute standardized target
-    sx = (target - mu) / sig
-    sx = sx.detach().cpu()
-    pdf = _normpdf(sx)
-    cdf = _normcdf(sx)
-    pi_inv = 1.0 / np.sqrt(np.pi)
-    crps = sig.detach().cpu() * (sx * (2 * cdf - 1) + 2 * pdf - pi_inv)
-
-    # This would additionally returnt the grad wrt to mu and sig
-    # if grad:
-    #     dmu = 1 - 2 * cdf
-    #     dsig = 2 * pdf - pi_inv
-    #     return crps, np.array([dmu, dsig])
-    crps = crps * mask
-    return torch.mean(crps)
-
-
-# TODO
-def empirical_crps(prediction: torch.Tensor, target: torch.Tensor, null_val: float = np.nan) -> torch.Tensor:
-    return np.mean(y_pred_samples <= x)
-
+def empirical_crps(prediction: torch.Tensor, target: torch.Tensor, distribution_type:str, null_val: float = np.nan) -> torch.Tensor:
+    '''
+    estimator: str:"akr_circperm": CRPS estimaton based on the AKR with cyclic permutation.
+                    "akr": CRPS estimaton based on the approximate kernel representation.
+                    "fair": Fair version of the CRPS estimator based on the energy form.
+                    "int": CRPS estimator based on the integral form.
+                    "nrg": CRPS estimator based on the energy form.
+                    "pwm": CRPS estimator based on the probability weighted moment (PWM) form.
+                    "qd": CRPS estimator based on the quantile decomposition form.
+                    "ownrg": Outcome-weighted CRPS estimator based on the energy form.
+                    "vrnrg": Vertically re-scaled CRPS estimator based on the energy form.
+    '''
+    # return np.mean(y_pred_samples <= x)
+    target = target.clone().squeeze(-1).detach().cpu()
+    prob_head = ProbabilisticHead(1, 1, distribution_type)
+    samples = prob_head.sample(prediction, num_samples=100) # [samples x bs x seq_len x nvars]
+    samples = samples.permute(1, 2, 3, 0).detach().cpu()       # [bs x seq_len x nvars x samples]
+    score = sr.crps_ensemble(target, samples, estimator='pwm')
+    return np.mean(score)
 
 def crps_old(prediction: torch.Tensor, target: torch.Tensor, null_val: float = np.nan) -> torch.Tensor:
     """
@@ -219,58 +233,22 @@ def nll_loss(prediction: torch.Tensor, target: torch.Tensor, distribution_type: 
     mask /= torch.mean((mask))
     mask = torch.where(torch.isnan(mask), torch.zeros_like(mask), mask)
 
-    # 2. Compute Negative Log-Likelihood (NLL) for each distribution
-    if distribution_type == "gaussian":
-        mu, sigma = prediction[..., 0], prediction[..., 1]
-        sigma = torch.clamp(sigma, min=1e-6)  # Ensure std > 0
-        distribution = dist.Normal(mu, sigma)
-    elif distribution_type == "laplace":
-        loc, scale = prediction[..., 0], prediction[..., 1]
-        scale = torch.clamp(scale, min=1e-6)
-        distribution = dist.Laplace(loc, scale)
-    elif distribution_type == "student_t":
-        mu, sigma, df = prediction[..., 0], prediction[..., 1], prediction[..., 2]
-        sigma = torch.clamp(sigma, min=1e-6)
-        df = torch.clamp(df, min=1.1)  # Ensure degrees of freedom > 1
-        distribution = dist.StudentT(df, mu, sigma)
-    elif distribution_type == "lognormal":
-        mu, sigma = prediction[..., 0], prediction[..., 1]
-        sigma = torch.clamp(sigma, min=1e-6)
-        distribution = dist.LogNormal(mu, sigma)
-    elif distribution_type == "beta":
-        alpha, beta = prediction[..., 0], prediction[..., 1]
-        alpha = torch.clamp(alpha, min=1e-6)
-        beta = torch.clamp(beta, min=1e-6)
-        distribution = dist.Beta(alpha, beta)
-    elif distribution_type == "gamma":
-        shape, rate = prediction[..., 0], prediction[..., 1]
-        shape = torch.clamp(shape, min=1e-6)
-        rate = torch.clamp(rate, min=1e-6)
-        distribution = dist.Gamma(shape, rate)
-    elif distribution_type == "weibull":
-        scale, concentration = prediction[..., 0], prediction[..., 1]
-        scale = torch.clamp(scale, min=1e-6)
-        concentration = torch.clamp(concentration, min=1e-6)
-        distribution = dist.Weibull(scale, concentration)
-    elif distribution_type == "poisson":
-        rate = prediction[..., 0]
-        rate = torch.clamp(rate, min=1e-6)
-        distribution = dist.Poisson(rate)
-    elif distribution_type == "negative_binomial":
-        rate, dispersion = prediction[..., 0], prediction[..., 1]
-        rate = torch.clamp(rate, min=1e-6)
-        dispersion = torch.clamp(dispersion, min=1e-6)
-        probs = rate / (rate + dispersion)  # Convert to success probability
-        distribution = dist.NegativeBinomial(total_count=dispersion, probs=probs)
-    elif distribution_type == "dirichlet":
-        concentration = prediction
-        concentration = torch.clamp(concentration, min=1e-6)
-        distribution = dist.Dirichlet(concentration)
+    # initialize an instance of the ProbabilisticHead class to have access to the __get_dist__ function
+    prob_head = ProbabilisticHead(1, 1, distribution_type)
+    distribution = prob_head.__get_dist__(prediction)
+    if type(distribution) == list:
+        nll = []
+        assert len(distribution) == target.shape[-1]
+        for i, dist in enumerate(distribution):
+            # compute log prob across all batches
+            log_prob = dist.log_prob(target[:, :, i])        
+            nll.append(log_prob)
+        # Sum log likelihood values for the single series, then it has shape equal to batch size
+        log_likelihood = sum(nll)
+        return -torch.mean(log_likelihood) # * mask)
     else:
-        raise ValueError(f"Unsupported distribution type: {distribution_type}")
-    log_likelihood = distribution.log_prob(target)
-    # 3. Apply mask and return loss
-    log_likelihood = log_likelihood * mask
-    loss = -torch.mean(log_likelihood)
-    
-    return loss
+        log_likelihood = distribution.log_prob(target)
+        # 3. Apply mask and return loss
+        log_likelihood = log_likelihood * mask
+        loss = -torch.mean(log_likelihood)
+        return loss

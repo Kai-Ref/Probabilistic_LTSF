@@ -82,7 +82,7 @@ class ZScoreScaler(BaseScaler):
         input_data[..., self.target_channel] = (input_data[..., self.target_channel] - mean) / std
         return input_data
 
-    def inverse_transform(self, input_data: torch.Tensor, gaussian=False) -> torch.Tensor:
+    def inverse_transform(self, input_data: torch.Tensor, head='') -> torch.Tensor:
         """
         Reverse the Z-score normalization to recover the original data scale.
 
@@ -100,9 +100,15 @@ class ZScoreScaler(BaseScaler):
         std = self.std.to(input_data.device)
         # Clone the input data to prevent in-place modification (which is not allowed in PyTorch)
         input_data = input_data.clone()
-        if gaussian:#TODO also handle quantile normalization, i think this only normalizes the first channel...
+        if head == 'gaussian':#TODO also handle quantile normalization, i think this only normalizes the first channel...
             input_data[..., 0] = input_data[..., 0] * std + mean
             input_data[..., 1] = input_data[..., 1] * std
+        elif head == 'm_gaussian':
+            input_data[..., 0] = input_data[..., 0] * std + mean
+            print(std.shape)
+            print(input_data.shape)
+            # Σ_normalized[i,j] = Σ[i,j] / (σ[i] * σ[j])
+            input_data[..., 1:] = input_data[..., 1:] * std
         else:
             input_data[..., self.target_channel] = input_data[..., self.target_channel] * std + mean
         return input_data

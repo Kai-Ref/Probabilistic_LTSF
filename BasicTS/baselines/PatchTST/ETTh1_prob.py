@@ -3,7 +3,7 @@ import sys
 from easydict import EasyDict
 sys.path.append(os.path.abspath(__file__ + '/../../..'))
 
-from basicts.metrics import masked_mae, masked_mse, nll_loss, crps, Evaluator, quantile_loss
+from basicts.metrics import masked_mae, masked_mse, nll_loss, crps, Evaluator, quantile_loss, empirical_crps
 from basicts.data import TimeSeriesForecastingDataset
 from basicts.runners import SimpleProbTimeSeriesForecastingRunner, SimpleTimeSeriesForecastingRunner
 from basicts.scaler import ZScoreScaler
@@ -45,7 +45,7 @@ MODEL_PARAM = {
     "decomposition": 0,                         # decomposition; True 1 False 0
     "kernel_size": 25,                          # decomposition-kernel
     "head_type": "probabilistic",
-    "distribution_type": "student_t", 
+    "distribution_type": "gaussian", 
     "quantiles": [],#[0.1, 0.25, 0.5, 0.75, 0.9],
 }
 NUM_EPOCHS = 100
@@ -95,14 +95,20 @@ CFG.MODEL.TARGET_FEATURES = [0]
 
 CFG.METRICS = EasyDict()
 # Metrics settings
+all_metrics = ["MSE", "abs_error", "abs_target_sum", "abs_target_mean",
+                                "MAPE", "sMAPE", "MASE", "RMSE", "NRMSE", "ND", "weighted_ND",
+                                "mean_absolute_QuantileLoss", "CRPS", "MAE_Coverage", "NLL", 
+                                #"VS", "ES"
+                                ]
 CFG.METRICS.FUNCS = EasyDict({'NLL': nll_loss,
                             #'MAE': masked_mae,
                             #'MSE': masked_mse,
-                            #'CRPS': crps,
+                            'CRPS': crps,
+                            #'CRPS_E': empirical_crps,
                             #'QL': quantile_loss,
                             #'Evaluator': Evaluator(distribution_type=MODEL_PARAM['distribution_type'], 
                             #                        quantiles=MODEL_PARAM['quantiles']),
-                            'Val_Evaluator': Evaluator(distribution_type=MODEL_PARAM['distribution_type'], 
+                            'Val_Evaluator': Evaluator(distribution_type=MODEL_PARAM['distribution_type'], metrics = all_metrics,
                                                     quantiles=MODEL_PARAM['quantiles']),  # only use the evaluator during validation/testing iters
                             })
 CFG.METRICS.TARGET = 'NLL'

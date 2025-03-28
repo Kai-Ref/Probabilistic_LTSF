@@ -2,6 +2,7 @@ from typing import Dict, Optional, Tuple, Union
 import functools
 import torch
 import inspect
+import time
 from tqdm import tqdm
 
 from ..base_tsf_runner import BaseTimeSeriesForecastingRunner
@@ -70,10 +71,7 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
             # Assuming the last dimension contains the mean and std predictions
             # mean_predictions = input_data['prediction'][..., 0]  # Mean is the first element in the last dimension
             # input_data['prediction'][..., 0] = self.scaler.inverse_transform(mean_predictions)
-            if self.dsitribution_type == 'gaussian':
-                input_data['prediction'] = self.scaler.inverse_transform(input_data['prediction'], gaussian=True)
-            else:
-                input_data['prediction'] = self.scaler.inverse_transform(input_data['prediction'], gaussian=False)
+            input_data['prediction'] = self.scaler.inverse_transform(input_data['prediction'], head=self.distribution_type)
             # input_data['prediction'] = self.scaler.inverse_transform(input_data['prediction'])
             input_data['target'] = self.scaler.inverse_transform(input_data['target'])
             input_data['inputs'] = self.scaler.inverse_transform(input_data['inputs'])
@@ -245,22 +243,16 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
 
         covariate_names = inspect.signature(metric_func).parameters.keys()
         args = {k: v for k, v in args.items() if k in covariate_names}
-        if type(metric_func) is Evaluator:
-            if 'null_val' not in covariate_names:
-                args['null_val'] = self.null_val
-            args['model'] = self.model
-            metric_item = metric_func(**args)
-        elif isinstance(metric_func, functools.partial):
-            if 'null_val' not in metric_func.keywords and 'null_val' in covariate_names: # null_val is required but not provided
-                args['null_val'] = self.null_val
+        if 'null_val' in covariate_names:#'null_val' not in metric_func.keywords and
+            args['null_val'] = self.null_val
+        
+        if isinstance(metric_func, functools.partial) or (type(metric_func) is Evaluator):
             metric_item = metric_func(**args)
         elif callable(metric_func):
             if ('quantile_loss' in str(metric_func)) and ('quantiles' not in list(args.keys())):
                 args['quantiles'] = self.quantiles
-            if 'nll_loss' in str(metric_func):
+            if ('nll_loss' in str(metric_func)) or ('crps' in str(metric_func)):
                 args['distribution_type'] = self.distribution_type
-            if 'null_val' in covariate_names: # null_val is required
-                args['null_val'] = self.null_val
             metric_item = metric_func(**args)
         else:
             raise TypeError(f'Unknown metric type: {type(metric_func)}')
@@ -325,6 +317,68 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
             else:
                 self.update_epoch_meter(f'val/{metric_name}', metric_item.item())
 
+    @torch.no_grad()
+    @master_only
+    def validate(self, cfg: Dict = None, train_epoch: Optional[int] = None):
+        """Validate model.
+
+        Args:
+            cfg (Dict, optional): config
+            train_epoch (int, optional): current epoch if in training process.
+        """
+
+        # init validation if not in training process
+        if train_epoch is None:
+            self.init_validation(cfg)
+
+        self.logger.info('Start validation.')
+
+        self.on_validating_start(train_epoch)
+
+        val_start_time = time.time()
+        self.model.eval()
+
+        # prediction, target, inputs = [], [], []
+
+        # for data in tqdm(self.val_data_loader):
+        #     forward_return = self.forward(data, epoch=None, iter_num=None, train=False)
+
+        #     loss = self.metric_forward(self.loss, forward_return)
+        #     self.update_epoch_meter('val/loss', loss.item())
+
+        #     if not self.if_evaluate_on_gpu:
+        #         forward_return['prediction'] = forward_return['prediction'].detach().cpu()
+        #         forward_return['target'] = forward_return['target'].detach().cpu()
+        #         forward_return['inputs'] = forward_return['inputs'].detach().cpu()
+
+        #     prediction.append(forward_return['prediction'])
+        #     target.append(forward_return['target'])
+        #     inputs.append(forward_return['inputs'])
+
+        # prediction = torch.cat(prediction, dim=0)
+        # target = torch.cat(target, dim=0)
+        # inputs = torch.cat(inputs, dim=0)
+
+        # returns_all = {'prediction': prediction, 'target': target, 'inputs': inputs}
+        # metrics_results = self.compute_evaluation_metrics(returns_all, mode='val')
+
+        #tqdm process bar
+        data_iter = tqdm(self.val_data_loader)
+
+        # val loop
+        for iter_index, data in enumerate(data_iter):
+            self.val_iters(iter_index, data)
+
+        val_end_time = time.time()
+        self.update_epoch_meter('val/time', val_end_time - val_start_time)
+        # print val meters
+        self.print_epoch_meters('val')
+        if train_epoch is not None:
+            # tensorboard plt meters
+            self.plt_epoch_meters('val', train_epoch // self.val_interval)
+
+        self.on_validating_end(train_epoch)
+
     def compute_evaluation_metrics(self, returns_all: Dict):
         """Compute metrics for evaluating model performance during the test process.
 
@@ -343,9 +397,9 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
                 if metric_name.lower() == 'mase':
                     continue # MASE needs to be calculated after all horizons
                 metric_item = self.metric_forward(metric_func, {'prediction': pred, 'target': real})
-                metric_repr += f', Test {metric_name}: {metric_item.item():.4f}'
+                metric_repr += f', test {metric_name}: {metric_item.item():.4f}'
                 metrics_results[f'horizon_{i + 1}'][metric_name] = metric_item.item()
-            self.logger.info(f'Evaluate best model on test data for horizon {i + 1}{metric_repr}')
+            self.logger.info(f'Evaluate best model on Testing data for horizon {i + 1}{metric_repr}')
 
         metrics_results['overall'] = {}
         for metric_name, metric_func in self.metrics.items():
