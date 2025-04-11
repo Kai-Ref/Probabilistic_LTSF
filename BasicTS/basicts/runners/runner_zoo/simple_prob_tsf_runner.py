@@ -3,6 +3,7 @@ import functools
 import torch
 import inspect
 import time
+import datetime
 from tqdm import tqdm
 
 from ..base_tsf_runner import BaseTimeSeriesForecastingRunner
@@ -14,6 +15,7 @@ from easytorch.core.checkpoint import (backup_last_ckpt, clear_ckpt, load_ckpt,
                                        save_ckpt)
 
 from ...metrics import (masked_mae, Evaluator)
+import wandb
 
 class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
     """
@@ -36,7 +38,16 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
         self.output_seq_len = cfg["DATASET"]["PARAM"]["output_len"]
         self.model_name = cfg["MODEL"]["NAME"]
         print(self.model_name)
-
+        self.use_wandb = cfg['USE_WANDB']
+        # start wandb
+        if self.use_wandb:
+            timestamp = datetime.datetime.now().strftime("%b_%d_%H_%M")
+            os.environ["WANDB_API_KEY"] = "fc6544bc618ba7ae3008cf7c53d9650e1668bf12"
+            wandb.init(entity="kai-reffert-university-mannheim",
+                project="Prob_LTSF",  
+            #group=f"DDP_{config['model_name']}_{timestamp}",
+            name=f"{self.distribution_type}_{self.model_name}_{timestamp}",
+            config=cfg)
 
     def preprocessing(self, input_data: Dict) -> Dict:
         """Preprocess data.
@@ -278,6 +289,8 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
             forward_return['target'] = forward_return['target'][:, :cl_length, :, :]
         loss = self.metric_forward(self.loss, forward_return)
         self.update_epoch_meter('train/loss', loss.item())
+        if self.use_wandb and iter_index % 10 == 0:
+            wandb_dict = {'train/epoch': epoch, 'train/iter': iter_num, 'train/loss': loss.item()}
         for metric_name, metric_func in self.metrics.items():
             if "Val_Evaluator" in metric_name:
                 continue
@@ -291,6 +304,11 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
                         self.update_epoch_meter(f'ProbTS-train/{key}', value)
             else:
                 self.update_epoch_meter(f'train/{metric_name}', metric_item.item())
+                if self.use_wandb and iter_index % 10 == 0:
+                    wandb_dict[f'train/{metric_name}'] = metric_item.item()
+                    
+        if self.use_wandb and iter_index % 10 == 0:   
+            wandb.log(wandb_dict, step=iter_num)
         return loss
 
     def val_iters(self, iter_index: int, data: Union[torch.Tensor, Tuple]):
@@ -371,6 +389,22 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
 
         val_end_time = time.time()
         self.update_epoch_meter('val/time', val_end_time - val_start_time)
+        
+        # Now log validation averages to wandb
+        if self.use_wandb and train_epoch is not None:
+            # Calculate proper global step at end of validation
+            global_step = train_epoch * self.iter_per_epoch
+            
+            # Log all validation metrics at once
+            wandb_dict = {}            
+            # Add training metrics from meter pool
+            for meter_name in self.meter_pool._pool.keys():
+                if 'val' in meter_name:
+                    meter_value = self.meter_pool._pool[meter_name]['meter'].avg
+                    wandb_dict[f'epoch_summary/{meter_name}'] = meter_value
+            
+            wandb.log(wandb_dict, step=global_step)
+        
         # print val meters
         self.print_epoch_meters('val')
         if train_epoch is not None:
@@ -387,6 +421,7 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
         """
 
         metrics_results = {}
+        wandb_dict = {} if self.use_wandb else None
         for i in self.evaluation_horizons:
             pred = returns_all['prediction'][:, i, :, :]
             real = returns_all['target'][:, i, :, :]
@@ -400,6 +435,7 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
                 metric_repr += f', test {metric_name}: {metric_item.item():.4f}'
                 metrics_results[f'horizon_{i + 1}'][metric_name] = metric_item.item()
             self.logger.info(f'Evaluate best model on Testing data for horizon {i + 1}{metric_repr}')
+        
 
         metrics_results['overall'] = {}
         for metric_name, metric_func in self.metrics.items():
@@ -412,9 +448,21 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
                         self.register_epoch_meter(f'ProbTS-test/{key}', 'test', '{:.4f}')
                         self.update_epoch_meter(f'ProbTS-test/{key}', value)
                     metrics_results['overall']['ProbTS-{key}'] = value
+                    if self.use_wandb:
+                        wandb_dict[f'ProbTS-test/{key}'] = value
             else:
                 self.update_epoch_meter(f'test/{metric_name}', metric_item.item())
                 metrics_results['overall'][metric_name] = metric_item.item()
+                if self.use_wandb:
+                    wandb_dict[f'test/{metric_name}'] = metric_item.item()
+        if self.use_wandb:   
+            # If we're in the training process, use the current global step
+            if hasattr(self, 'current_epoch') and self.current_epoch is not None:
+                global_step = self.current_epoch * self.iter_per_epoch
+                wandb.log(wandb_dict, step=global_step)
+            else:
+                # For standalone testing
+                wandb.log(wandb_dict)
         return metrics_results
 
 
@@ -473,3 +521,44 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
                 json.dump(metrics_results, f, indent=4)
 
         return returns_all
+
+    def on_epoch_end(self, epoch: int) -> None:
+        """
+        Callback at the end of each epoch to handle validation and testing.
+
+        Args:
+            epoch (int): The current epoch number.
+        """
+        # Log epoch summary to wandb
+        if self.use_wandb:
+            global_step = epoch * self.iter_per_epoch
+            # Create summary dict with averages
+            wandb_dict = {
+                'epoch': epoch,
+                # 'epoch_summary/train_loss': self.meter_pool['train']['loss']
+            }
+
+
+
+            # Add training metrics from meter pool
+            for meter_name in self.meter_pool._pool.keys():
+                if 'train' in meter_name:
+                    meter_value = self.meter_pool._pool[meter_name]['meter'].avg
+                    wandb_dict[f'epoch_summary/{meter_name}'] = meter_value
+            
+            wandb.log(wandb_dict, step=global_step)
+        
+        # print training meters
+        self.print_epoch_meters('train')
+        # plot training meters to TensorBoard
+        self.plt_epoch_meters('train', epoch)
+        # perform validation if configured
+        if self.val_data_loader is not None and epoch % self.val_interval == 0:
+            self.validate(train_epoch=epoch)
+        # perform testing if configured
+        if self.test_data_loader is not None and epoch % self.test_interval == 0:
+            self.test_pipeline(train_epoch=epoch)
+        # save the model checkpoint
+        self.save_model(epoch)
+        # reset epoch meters
+        self.reset_epoch_meters()

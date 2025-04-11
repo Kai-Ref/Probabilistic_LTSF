@@ -45,7 +45,7 @@ MODEL_PARAM = {
     "decomposition": 0,                         # decomposition; True 1 False 0
     "kernel_size": 25,                          # decomposition-kernel
     "head_type": "probabilistic",
-    "distribution_type": "gaussian", 
+    "distribution_type": "flow", 
     "quantiles": [],#[0.1, 0.25, 0.5, 0.75, 0.9],
 }
 NUM_EPOCHS = 100
@@ -57,6 +57,8 @@ CFG.DESCRIPTION = 'An Example Config'
 CFG.GPU_NUM = 1 # Number of GPUs to use (0 for CPU mode)
 # Runner
 CFG.RUNNER = SimpleProbTimeSeriesForecastingRunner
+
+CFG.USE_WANDB = True
 
 ############################## Dataset Configuration ##############################
 CFG.DATASET = EasyDict()
@@ -108,8 +110,8 @@ CFG.METRICS.FUNCS = EasyDict({'NLL': nll_loss,
                             #'QL': quantile_loss,
                             #'Evaluator': Evaluator(distribution_type=MODEL_PARAM['distribution_type'], 
                             #                        quantiles=MODEL_PARAM['quantiles']),
-                            'Val_Evaluator': Evaluator(distribution_type=MODEL_PARAM['distribution_type'], metrics = all_metrics,
-                                                    quantiles=MODEL_PARAM['quantiles']),  # only use the evaluator during validation/testing iters
+                            # 'Val_Evaluator': Evaluator(distribution_type=MODEL_PARAM['distribution_type'], metrics = all_metrics,
+                            #                         quantiles=MODEL_PARAM['quantiles']),  # only use the evaluator during validation/testing iters
                             })
 CFG.METRICS.TARGET = 'NLL'
 CFG.METRICS.NULL_VAL = NULL_VAL
