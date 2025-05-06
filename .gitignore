@@ -93,3 +93,4 @@ target/
 .vscode/
 datasets/
 wandb/
+*.out
