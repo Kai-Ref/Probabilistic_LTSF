@@ -382,6 +382,222 @@ class DirichletHead(BaseDistribution):
         concentration = torch.clamp(concentration, min=1e-6)
         return dist.Dirichlet(concentration)
 
+class CopulaHead(BaseDistribution):
+    """
+    Attention-based copula head with flexible marginals.
+    - Supports any marginal head from the DISTRIBUTIONS dict (e.g., Gaussian, Laplace, Beta, etc.).
+    - Uses multi-head attention to model dependencies between variables (copula).
+    - Returns a custom distribution object for NLL and sampling.
+    Args (in args dict):
+        marginal_type, marginal_args, attention_heads, attention_layers, attention_dim, mlp_layers, mlp_dim, resolution, dropout, fixed_permutation
+    """
+    def __init__(self, input_dim, output_dim, args):
+        super().__init__(input_dim, output_dim, args)
+        self.output_dim = output_dim
+        self.input_dim = input_dim
+        self.attention_heads = args.get('attention_heads', 2)
+        self.attention_layers = args.get('attention_layers', 2)
+        self.attention_dim = args.get('attention_dim', 16)
+        self.mlp_layers = args.get('mlp_layers', 2)
+        self.mlp_dim = args.get('mlp_dim', 32)
+        self.resolution = args.get('resolution', 10)
+        self.dropout = args.get('dropout', 0.1)
+        self.fixed_permutation = args.get('fixed_permutation', False)
+        self.marginal_type = args.get('marginal_type', 'gaussian')
+        self.marginal_args = args.get('marginal_args', {})
+
+        # Marginal head (shared for all variables, but can be extended to per-variable)
+        DISTRIBUTIONS = {
+        "gaussian": GaussianHead,  # Symmetric, bell-shaped distribution defined by mean (μ) and standard deviation (σ). Suitable for continuous data with normal errors.
+        "laplace": LaplaceHead,  # Similar to Gaussian but with heavier tails. Defined by location (μ) and scale (b). Useful for modeling data with outliers.
+        "student_t": StudentTHead,  # Like Gaussian but with heavier tails, controlled by degrees of freedom (ν). More robust to outliers.
+        "lognormal": LogNormalHead,  # Distribution where the logarithm of the variable is normally distributed. Used for positive, skewed data (e.g., financial returns).
+        "beta": BetaHead,  # Defined on the interval [0,1], controlled by two shape parameters (α, β). Used for modeling probabilities or proportions.
+        "gamma": GammaHead,  # Defined for positive values, controlled by shape (k) and scale (θ). Used for modeling waiting times or rainfall amounts.
+        "weibull": WeibullHead,  # Flexible distribution for modeling lifetimes and reliability analysis, defined by scale (λ) and shape (k).
+        "poisson": PoissonHead,  # Discrete distribution modeling count data (e.g., number of arrivals per time period). Defined by rate (λ).
+        "negative_binomial": NegativeBinomialHead,  # Models overdispersed count data, generalizing Poisson by allowing variance to exceed the mean.
+        "dirichlet": DirichletHead,  # A distribution over probability vectors (e.g., multinomial proportions). Useful in Bayesian modeling and topic modeling.
+        "quantile": QuantileHead, 
+        "i_quantile": ImplicitQuantileHead,
+        "m_gaussian": MultivariateGaussianHead,
+        "m_lr_gaussian": LowRankMultivariateGaussianHead,
+        "flow": FlowHead
+        }
+        marginal_class = DISTRIBUTIONS[self.marginal_type]
+        self.marginal_head = marginal_class(input_dim, 1, self.marginal_args)
+
+        # Attention copula as before
+        self.dimension_shifting_layer = nn.Linear(self.input_dim, self.attention_heads * self.attention_dim)
+        def _easy_mlp(input_dim, hidden_dim, output_dim, num_layers, activation):
+            elayers = [nn.Linear(input_dim, hidden_dim), activation()]
+            for _ in range(1, num_layers):
+                elayers += [nn.Linear(hidden_dim, hidden_dim), activation()]
+            elayers += [nn.Linear(hidden_dim, output_dim)]
+            return nn.Sequential(*elayers)
+        self.key_creators = nn.ModuleList([
+            nn.ModuleList([
+                _easy_mlp(self.input_dim + 1, self.mlp_dim, self.attention_dim, self.mlp_layers, nn.ReLU)
+                for _ in range(self.attention_heads)
+            ]) for _ in range(self.attention_layers)
+        ])
+        self.value_creators = nn.ModuleList([
+            nn.ModuleList([
+                _easy_mlp(self.input_dim + 1, self.mlp_dim, self.attention_dim, self.mlp_layers, nn.ReLU)
+                for _ in range(self.attention_heads)
+            ]) for _ in range(self.attention_layers)
+        ])
+        self.attention_dropouts = nn.ModuleList([nn.Dropout(self.dropout) for _ in range(self.attention_layers)])
+        self.attention_layer_norms = nn.ModuleList([
+            nn.LayerNorm(self.attention_heads * self.attention_dim) for _ in range(self.attention_layers)
+        ])
+        self.feed_forwards = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(self.attention_heads * self.attention_dim, self.attention_heads * self.attention_dim),
+                nn.ReLU(),
+                nn.Dropout(self.dropout),
+                nn.Linear(self.attention_heads * self.attention_dim, self.attention_heads * self.attention_dim),
+                nn.Dropout(self.dropout),
+            ) for _ in range(self.attention_layers)
+        ])
+        self.feed_forward_layer_norms = nn.ModuleList([
+            nn.LayerNorm(self.attention_heads * self.attention_dim) for _ in range(self.attention_layers)
+        ])
+        self.dist_extractors = _easy_mlp(
+            self.attention_heads * self.attention_dim, self.mlp_dim, self.resolution, self.mlp_layers, nn.ReLU
+        )
+
+    def forward(self, x):
+        """
+        Args:
+            x: [batch, output_dim, input_dim] (embedding for each variable)
+        Returns:
+            prediction: torch.Tensor [batch, output_dim, param_dim] (marginal params and copula logits stacked)
+        """
+        batch, output_dim, input_dim = x.shape
+        # Marginal params for each variable
+        marginal_params = []
+        for v in range(output_dim):
+            marginal_params.append(self.marginal_head(x[:, v, :].unsqueeze(1)))  # [batch, 1, ...]
+        # Stack to [batch, output_dim, ...]
+        if isinstance(marginal_params[0], torch.Tensor):
+            marginal_params = torch.cat(marginal_params, dim=1)  # [batch, output_dim, param_dim]
+        else:
+            # If marginal returns tuple (e.g., for quantile), stack each element
+            marginal_params = tuple(torch.cat([mp[i] for mp in marginal_params], dim=1) for i in range(len(marginal_params[0])))
+        # Copula logits (as before)
+        u = torch.zeros(batch, output_dim, 1, device=x.device)
+        key_value_input = torch.cat([x, u], dim=2)
+        att_value = self.dimension_shifting_layer(x)
+        for layer in range(self.attention_layers):
+            att_value_heads = att_value.view(batch, output_dim, self.attention_heads, self.attention_dim)
+            keys = torch.stack([
+                self.key_creators[layer][h](key_value_input) for h in range(self.attention_heads)
+            ], dim=1)
+            values = torch.stack([
+                self.value_creators[layer][h](key_value_input) for h in range(self.attention_heads)
+            ], dim=1)
+            product = torch.einsum('bohi,bhwi->bhwo', att_value_heads, keys)
+            product = self.attention_dim ** (-0.5) * product
+            weights = nn.functional.softmax(product, dim=-1)
+            att = torch.einsum('bhwo,bhwi->bohi', weights, values)
+            att_merged_heads = att.reshape(batch, output_dim, self.attention_heads * self.attention_dim)
+            att_merged_heads = self.attention_dropouts[layer](att_merged_heads)
+            att_value = att_value + att_merged_heads
+            att_value = self.attention_layer_norms[layer](att_value)
+            att_feed_forward = self.feed_forwards[layer](att_value)
+            att_value = att_value + att_feed_forward
+            att_value = self.feed_forward_layer_norms[layer](att_value)
+        logits = self.dist_extractors(att_value)  # [batch, output_dim, resolution]
+        # Stack all outputs into a single tensor for compatibility
+        if isinstance(marginal_params, tuple):
+            # For tuple marginals, stack along last dim
+            marginal_params = torch.cat(marginal_params, dim=-1)  # [batch, output_dim, total_param_dim]
+        prediction = torch.cat([marginal_params, logits], dim=-1)  # [batch, output_dim, total_param_dim + resolution]
+        return prediction
+
+    class CopulaDistribution:
+        def __init__(self, marginal_head, prediction, output_dim, resolution):
+            """
+            Args:
+                marginal_head: the marginal head instance
+                prediction: [batch, output_dim, total_param_dim + resolution] (stacked)
+                output_dim: number of variables
+                resolution: number of bins for copula
+            """
+            self.marginal_head = marginal_head
+            self.prediction = prediction
+            self.output_dim = output_dim
+            self.resolution = resolution
+            # Unpack marginal params and logits
+            param_dim = prediction.shape[-1] - resolution
+            self.marginal_params = prediction[..., :param_dim]
+            self.logits = prediction[..., param_dim:]
+
+        def sample(self, num_samples=1):
+            # Sample from copula (categorical over bins, then uniform in bin)
+            batch, output_dim, resolution = self.logits.shape
+            device = self.logits.device
+            samples_u = torch.zeros(batch, num_samples, output_dim, device=device)
+            for v in range(output_dim):
+                probs = torch.softmax(self.logits[:, v, :], dim=-1)
+                cat = torch.distributions.Categorical(probs)
+                idx = cat.sample((num_samples,)).transpose(0, 1)
+                bin_width = 1.0 / resolution
+                u = torch.rand(batch, num_samples, device=device) * bin_width
+                samples_u[:, :, v] = idx * bin_width + u
+            # Transform uniforms to marginals
+            samples = []
+            for v in range(self.output_dim):
+                # Unpack params for v
+                param_v = self.marginal_params[:, v, ...]
+                dist_v = self.marginal_head.__get_dist__(param_v)
+                samples.append(dist_v.icdf(samples_u[:, :, v]))
+            samples = torch.stack(samples, dim=2)  # [batch, num_samples, output_dim]
+            return samples
+
+        def rsample(self, num_samples=1):
+            """
+            Alias for sample, for compatibility with torch.distributions API.
+            """
+            return self.sample(num_samples=num_samples)
+
+        def log_prob(self, target):
+            # target: [batch, output_dim]
+            u = []
+            log_marginals = 0
+            for v in range(self.output_dim):
+                param_v = self.marginal_params[:, v, ...]
+                dist_v = self.marginal_head.__get_dist__(param_v)
+                u_v = dist_v.cdf(target[:, v])
+                u.append(u_v)
+                log_marginals = log_marginals + dist_v.log_prob(target[:, v])
+            u = torch.stack(u, dim=1)  # [batch, output_dim]
+            idx = torch.clamp((u * self.resolution).long(), 0, self.resolution - 1)
+            log_copula = 0
+            for v in range(self.output_dim):
+                logit = self.logits[:, v, :]
+                log_prob = torch.log_softmax(logit, dim=-1)
+                log_copula = log_copula + log_prob[torch.arange(logit.shape[0]), idx[:, v]]
+            return log_marginals + log_copula
+
+    def __get_dist__(self, prediction):
+        """
+        Returns a custom CopulaDistribution object with .log_prob(), .sample(), and .rsample().
+        """
+        return self.CopulaDistribution(self.marginal_head, prediction, self.output_dim, self.resolution)
+
+    def sample(self, head_output, num_samples=1):
+        """
+        Samples from the copula-marginal distribution.
+        Args:
+            head_output: output of forward (stacked tensor)
+            num_samples: int
+        Returns:
+            samples: [batch, num_samples, output_dim]
+        """
+        dist = self.__get_dist__(head_output)
+        return dist.sample(num_samples=num_samples)
 
 def check_positive_definite(verbose=False):
     """

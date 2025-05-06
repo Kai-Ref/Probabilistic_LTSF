@@ -78,7 +78,7 @@ class MinMaxScaler(BaseScaler):
         input_data[..., self.target_channel] = (input_data[..., self.target_channel] - _min) / (_max - _min)
         return input_data
 
-    def inverse_transform(self, input_data: torch.Tensor) -> torch.Tensor:
+    def inverse_transform(self, input_data: torch.Tensor, head='') -> torch.Tensor:
         """
         Reverse the min-max normalization to recover the original data scale.
 
@@ -95,5 +95,16 @@ class MinMaxScaler(BaseScaler):
 
         _min = self.min.to(input_data.device)
         _max = self.max.to(input_data.device)
-        input_data[..., self.target_channel] = input_data[..., self.target_channel] * (_max - _min) + _min
+        input_data = input_data.clone()
+        if head == 'gaussian':#TODO also handle quantile normalization, i think this only normalizes the first channel...
+            input_data[..., 0] = input_data[..., 0] * (_max - _min) + _min
+            # input_data[..., 1] = input_data[..., 1] * std
+        elif head == 'm_gaussian':
+            input_data[..., 0] = input_data[..., 0] * (_max - _min) + _min
+            # print(std.shape)
+            # print(input_data.shape)
+            # # Σ_normalized[i,j] = Σ[i,j] / (σ[i] * σ[j])
+            # input_data[..., 1:] = input_data[..., 1:] * std
+        else:
+            input_data[..., self.target_channel] = input_data[..., self.target_channel] * (_max - _min) + _min
         return input_data

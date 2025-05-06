@@ -6,7 +6,7 @@ sys.path.append(os.path.abspath(__file__ + '/../../..'))
 from basicts.metrics import masked_mae, masked_mse, nll_loss, crps, Evaluator, quantile_loss, empirical_crps
 from basicts.data import TimeSeriesForecastingDataset
 from basicts.runners import SimpleProbTimeSeriesForecastingRunner, SimpleTimeSeriesForecastingRunner
-from basicts.scaler import ZScoreScaler
+from basicts.scaler import ZScoreScaler, MinMaxScaler
 from basicts.utils import get_regular_settings
 
 from .arch import PatchTST
@@ -41,11 +41,11 @@ MODEL_PARAM = {
     "padding_patch": "end",                     # None: None; end: padding on the end
     "revin": 0,                                 # RevIN; True 1 False 0
     "affine": 0,                                # RevIN-affine; True 1 False 0
-    "subtract_last": 0,                         # 0: subtract mean; 1: subtract last
-    "decomposition": 0,                         # decomposition; True 1 False 0
+    "subtract_last": 1,                         # 0: subtract mean; 1: subtract last
+    "decomposition": 1,                         # decomposition; True 1 False 0
     "kernel_size": 25,                          # decomposition-kernel
     "head_type": "probabilistic",
-    "distribution_type": "flow", 
+    "distribution_type": "gaussian", 
     "quantiles": [],#[0.1, 0.25, 0.5, 0.75, 0.9],
 }
 NUM_EPOCHS = 100
@@ -58,7 +58,7 @@ CFG.GPU_NUM = 1 # Number of GPUs to use (0 for CPU mode)
 # Runner
 CFG.RUNNER = SimpleProbTimeSeriesForecastingRunner
 
-CFG.USE_WANDB = True
+CFG.USE_WANDB = False
 
 ############################## Dataset Configuration ##############################
 CFG.DATASET = EasyDict()
@@ -76,7 +76,7 @@ CFG.DATASET.PARAM = EasyDict({
 ############################## Scaler Configuration ##############################
 CFG.SCALER = EasyDict()
 #Scaler settings
-CFG.SCALER.TYPE = ZScoreScaler # Scaler class
+CFG.SCALER.TYPE = 'None' #MinMaxScaler # Scaler class
 CFG.SCALER.PARAM = EasyDict({
    'dataset_name': DATA_NAME,
    'train_ratio': TRAIN_VAL_TEST_RATIO[0],
@@ -118,6 +118,8 @@ CFG.METRICS.NULL_VAL = NULL_VAL
 
 ############################## Training Configuration ##############################
 CFG.TRAIN = EasyDict()
+CFG.TRAIN.RESUME_TRAINING = False
+CFG.TRAIN.EARLY_STOPPING_PATIENCE = 5
 CFG.TRAIN.NUM_EPOCHS = NUM_EPOCHS
 CFG.TRAIN.CKPT_SAVE_DIR = os.path.join(
     'checkpoints',

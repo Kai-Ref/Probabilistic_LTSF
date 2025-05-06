@@ -69,7 +69,7 @@ class PatchTST(nn.Module):
                                   attn_mask=attn_mask, res_attention=res_attention, pre_norm=pre_norm, store_attn=store_attn,
                                   pe=pe, learn_pe=learn_pe, fc_dropout=fc_dropout, head_dropout=head_dropout, padding_patch = padding_patch,
                                   pretrain_head=pretrain_head, head_type=head_type, individual=individual, revin=revin, affine=affine,
-                                  subtract_last=subtract_last, verbose=verbose, **kwargs)
+                                  subtract_last=subtract_last, verbose=verbose, distribution_type=distribution_type, quantiles=quantiles, **kwargs)
             self.model_res = PatchTST_backbone(c_in=c_in, context_window = context_window, target_window=target_window, patch_len=patch_len, stride=stride, 
                                   max_seq_len=max_seq_len, n_layers=n_layers, d_model=d_model,
                                   n_heads=n_heads, d_k=d_k, d_v=d_v, d_ff=d_ff, norm=norm, attn_dropout=attn_dropout,
@@ -77,7 +77,7 @@ class PatchTST(nn.Module):
                                   attn_mask=attn_mask, res_attention=res_attention, pre_norm=pre_norm, store_attn=store_attn,
                                   pe=pe, learn_pe=learn_pe, fc_dropout=fc_dropout, head_dropout=head_dropout, padding_patch = padding_patch,
                                   pretrain_head=pretrain_head, head_type=head_type, individual=individual, revin=revin, affine=affine,
-                                  subtract_last=subtract_last, verbose=verbose, **kwargs)
+                                  subtract_last=subtract_last, verbose=verbose, distribution_type=distribution_type, quantiles=quantiles, **kwargs)
         else:
             self.model = PatchTST_backbone(c_in=c_in, context_window = context_window, target_window=target_window, patch_len=patch_len, stride=stride, 
                                   max_seq_len=max_seq_len, n_layers=n_layers, d_model=d_model,
@@ -107,7 +107,11 @@ class PatchTST(nn.Module):
             res = self.model_res(res_init)
             trend = self.model_trend(trend_init)
             x = res + trend
-            x = x.permute(0,2,1)    # x: [Batch, Input length, Channel]
+            if self.model_trend.head_type == 'probabilistic':
+                x= x.permute(0,2,1,3) # x: [Batch, Input length, Channel, params/quantiles]
+            else:
+                x = x.permute(0,2,1)    # x: [Batch, Input length, Channel]
+            return x
         else:
             x = x.permute(0,2,1)    # x: [Batch, Channel, Input length]
             x = self.model(x)

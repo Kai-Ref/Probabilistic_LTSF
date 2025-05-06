@@ -1,175 +1,0 @@
-2025-03-12 14:33:15,582 - easytorch-launcher - INFO - Launching EasyTorch training.
-2025-03-12 14:33:15,600 - easytorch-env - INFO - Use devices 0.
-2025-03-12 14:33:15,614 - easytorch-launcher - INFO - Initializing runner "<class 'basicts.runners.runner_zoo.simple_prob_tsf_runner.SimpleProbTimeSeriesForecastingRunner'>"
-2025-03-12 14:33:15,614 - easytorch-env - INFO - Disable TF32 mode
-2025-03-12 14:33:15,614 - easytorch - INFO - Set ckpt save dir: 'checkpoints/gaussian_PatchTST/ETTh1_100_336_336/3ad9f349b2a18eb0521092e66ed914e1'
-2025-03-12 14:33:15,614 - easytorch - INFO - Building model.
-2025-03-12 14:33:15,919 - easytorch-training - INFO - Initializing training.
-2025-03-12 14:33:15,919 - easytorch-training - INFO - Set clip grad, param: {'max_norm': 5.0}
-2025-03-12 14:33:15,919 - easytorch-training - INFO - Building training data loader.
-2025-03-12 14:33:15,921 - easytorch-training - INFO - Train dataset length: 7969
-2025-03-12 14:33:17,011 - easytorch-training - INFO - Set optim: Adam (
-Parameter Group 0
-    amsgrad: False
-    betas: (0.9, 0.999)
-    capturable: False
-    differentiable: False
-    eps: 1e-08
-    foreach: None
-    fused: None
-    lr: 0.0002
-    maximize: False
-    weight_decay: 0.0001
-)
-2025-03-12 14:33:17,012 - easytorch-training - INFO - Set lr_scheduler: <torch.optim.lr_scheduler.MultiStepLR object at 0x7f8382eed3d0>
-2025-03-12 14:33:17,014 - easytorch-training - INFO - Initializing validation.
-2025-03-12 14:33:17,014 - easytorch-training - INFO - Building val data loader.
-2025-03-12 14:33:17,015 - easytorch-training - INFO - Validation dataset length: 2209
-2025-03-12 14:33:17,015 - easytorch-training - INFO - Test dataset length: 2209
-2025-03-12 14:33:17,016 - easytorch-training - INFO - Number of parameters: 3182912
-2025-03-12 14:33:17,016 - easytorch-training - INFO - Epoch 1 / 100
-DESCRIPTION: An Example Config
-GPU_NUM: 1
-RUNNER: <class 'basicts.runners.runner_zoo.simple_prob_tsf_runner.SimpleProbTimeSeriesForecastingRunner'>
-DATASET:
-  NAME: ETTh1
-  TYPE: <class 'basicts.data.simple_tsf_dataset.TimeSeriesForecastingDataset'>
-  PARAM:
-    dataset_name: ETTh1
-    train_val_test_ratio: [0.6, 0.2, 0.2]
-    input_len: 336
-    output_len: 336
-SCALER:
-  TYPE: <class 'basicts.scaler.z_score_scaler.ZScoreScaler'>
-  PARAM:
-    dataset_name: ETTh1
-    train_ratio: 0.6
-    norm_each_channel: True
-    rescale: False
-MODEL:
-  NAME: PatchTST
-  ARCH: <class 'baselines.PatchTST.arch.patchtst_arch.PatchTST'>
-  PARAM:
-    enc_in: 7
-    seq_len: 336
-    pred_len: 336
-    e_layers: 3
-    n_heads: 4
-    d_model: 16
-    d_ff: 128
-    dropout: 0.3
-    fc_dropout: 0.3
-    head_dropout: 0.0
-    patch_len: 16
-    stride: 8
-    individual: 1
-    padding_patch: end
-    revin: 0
-    affine: 0
-    subtract_last: 0
-    decomposition: 0
-    kernel_size: 25
-    head_type: probabilistic
-    distribution_type: gaussian
-    quantiles: []
-  FORWARD_FEATURES: [0]
-  TARGET_FEATURES: [0]
-METRICS:
-  FUNCS:
-    NLL: gaussian_nll_loss
-    MAE: masked_mae
-    MSE: masked_mse
-    CRPS: crps
-    Evaluator: <basicts.metrics.probts.Evaluator object at 0x7f839ff76d90>
-  TARGET: NLL
-  NULL_VAL: nan
-TRAIN:
-  NUM_EPOCHS: 100
-  CKPT_SAVE_DIR: checkpoints/gaussian_PatchTST/ETTh1_100_336_336
-  LOSS: gaussian_nll_loss
-  OPTIM:
-    TYPE: Adam
-    PARAM:
-      lr: 0.0002
-      weight_decay: 0.0001
-  LR_SCHEDULER:
-    TYPE: MultiStepLR
-    PARAM:
-      milestones: [1, 25]
-      gamma: 0.5
-  CLIP_GRAD_PARAM:
-    max_norm: 5.0
-  DATA:
-    BATCH_SIZE: 64
-    SHUFFLE: True
-VAL:
-  INTERVAL: 1
-  DATA:
-    BATCH_SIZE: 64
-TEST:
-  INTERVAL: 1
-  DATA:
-    BATCH_SIZE: 64
-EVAL:
-  USE_GPU: True
-
-gaussian
-  0%|          | 0/125 [00:00<?, ?it/s]/home/kreffert/Probabilistic_LTSF/BasicTS/basicts/metrics/prob_metrics.py:26: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
-  return torch.tensor(special.ndtr(x), dtype=x.dtype, device=x.device).clone()
-/home/kreffert/Probabilistic_LTSF/BasicTS/basicts/metrics/probts.py:346: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
-  targets = torch.tensor(targets).clone()
-/home/kreffert/Probabilistic_LTSF/BasicTS/basicts/metrics/probts.py:347: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
-  forecasts = torch.tensor(forecasts).clone()
-  1%|          | 1/125 [00:00<01:12,  1.71it/s]  2%|▏         | 2/125 [00:00<00:38,  3.23it/s]  2%|▏         | 3/125 [00:00<00:26,  4.63it/s]  3%|▎         | 4/125 [00:00<00:20,  5.83it/s]  5%|▍         | 6/125 [00:01<00:15,  7.50it/s]  6%|▌         | 7/125 [00:01<00:14,  8.03it/s]  7%|▋         | 9/125 [00:01<00:13,  8.85it/s]  9%|▉         | 11/125 [00:01<00:12,  9.20it/s] 10%|█         | 13/125 [00:01<00:11,  9.46it/s] 12%|█▏        | 15/125 [00:02<00:11,  9.65it/s] 13%|█▎        | 16/125 [00:02<00:11,  9.69it/s] 14%|█▍        | 18/125 [00:02<00:10,  9.85it/s] 16%|█▌        | 20/125 [00:02<00:10,  9.94it/s] 18%|█▊        | 22/125 [00:02<00:10,  9.94it/s] 19%|█▉        | 24/125 [00:02<00:10,  9.99it/s] 21%|██        | 26/125 [00:03<00:09, 10.05it/s] 22%|██▏       | 28/125 [00:03<00:09, 10.08it/s] 24%|██▍       | 30/125 [00:03<00:09, 10.10it/s] 26%|██▌       | 32/125 [00:03<00:09, 10.06it/s] 27%|██▋       | 34/125 [00:03<00:09, 10.09it/s] 29%|██▉       | 36/125 [00:04<00:08, 10.12it/s] 30%|███       | 38/125 [00:04<00:08, 10.14it/s] 32%|███▏      | 40/125 [00:04<00:08, 10.16it/s] 34%|███▎      | 42/125 [00:04<00:08, 10.15it/s] 35%|███▌      | 44/125 [00:04<00:08, 10.08it/s] 37%|███▋      | 46/125 [00:05<00:07, 10.07it/s] 38%|███▊      | 48/125 [00:05<00:07, 10.10it/s] 40%|████      | 50/125 [00:05<00:07, 10.11it/s] 42%|████▏     | 52/125 [00:05<00:07, 10.13it/s] 43%|████▎     | 54/125 [00:05<00:07, 10.14it/s] 45%|████▍     | 56/125 [00:06<00:06, 10.14it/s] 46%|████▋     | 58/125 [00:06<00:06, 10.11it/s] 48%|████▊     | 60/125 [00:06<00:06, 10.13it/s] 50%|████▉     | 62/125 [00:06<00:06, 10.10it/s] 51%|█████     | 64/125 [00:06<00:06,  9.93it/s] 52%|█████▏    | 65/125 [00:06<00:06,  9.93it/s] 54%|█████▎    | 67/125 [00:07<00:05,  9.98it/s] 55%|█████▌    | 69/125 [00:07<00:05, 10.07it/s] 57%|█████▋    | 71/125 [00:07<00:05, 10.12it/s] 58%|█████▊    | 73/125 [00:07<00:05, 10.15it/s] 60%|██████    | 75/125 [00:07<00:04, 10.15it/s] 62%|██████▏   | 77/125 [00:08<00:04, 10.13it/s] 63%|██████▎   | 79/125 [00:08<00:04, 10.16it/s] 65%|██████▍   | 81/125 [00:08<00:04, 10.18it/s] 66%|██████▋   | 83/125 [00:08<00:04, 10.21it/s] 68%|██████▊   | 85/125 [00:08<00:03, 10.15it/s] 70%|██████▉   | 87/125 [00:09<00:03, 10.15it/s] 71%|███████   | 89/125 [00:09<00:03, 10.17it/s] 73%|███████▎  | 91/125 [00:09<00:03, 10.18it/s] 74%|███████▍  | 93/125 [00:09<00:03, 10.16it/s] 76%|███████▌  | 95/125 [00:09<00:02, 10.18it/s] 78%|███████▊  | 97/125 [00:10<00:02, 10.17it/s] 79%|███████▉  | 99/125 [00:10<00:02, 10.20it/s] 81%|████████  | 101/125 [00:10<00:02, 10.22it/s] 82%|████████▏ | 103/125 [00:10<00:02, 10.23it/s] 84%|████████▍ | 105/125 [00:10<00:01, 10.24it/s] 86%|████████▌ | 107/125 [00:11<00:01, 10.24it/s] 87%|████████▋ | 109/125 [00:11<00:01, 10.25it/s] 89%|████████▉ | 111/125 [00:11<00:01, 10.25it/s] 90%|█████████ | 113/125 [00:11<00:01, 10.24it/s] 92%|█████████▏| 115/125 [00:11<00:00, 10.17it/s] 94%|█████████▎| 117/125 [00:12<00:00, 10.19it/s] 95%|█████████▌| 119/125 [00:12<00:00, 10.21it/s] 97%|█████████▋| 121/125 [00:12<00:00, 10.21it/s] 98%|█████████▊| 123/125 [00:12<00:00, 10.18it/s]100%|██████████| 125/125 [00:12<00:00, 10.64it/s]100%|██████████| 125/125 [00:12<00:00,  9.75it/s]
-2025-03-12 14:33:29,845 - easytorch-training - INFO - Result <train>: [train/time: 12.83 (s), train/lr: 2.00e-04, train/loss: 1.5427, train/NLL: 1.5427, train/MAE: 0.8168, train/MSE: 1.2323, train/CRPS: 0.4684, train/Evaluator: 0.0000, ProbTS-train/MSE: 0.7418, ProbTS-train/MSE-Sum: 10.5432, ProbTS-train/abs_error: 1501.3556, ProbTS-train/abs_error-Sum: 839.4771, ProbTS-train/abs_target_sum: 1754.6209, ProbTS-train/abs_target_sum-Sum: 1173.9149, ProbTS-train/abs_target_mean: 0.7460, ProbTS-train/abs_target_mean-Sum: 3.4938, ProbTS-train/MAPE: 7.0453, ProbTS-train/MAPE-Sum: 2.6662, ProbTS-train/sMAPE: 1.1426, ProbTS-train/sMAPE-Sum: 1.0260, ProbTS-train/RMSE: 0.8453, ProbTS-train/RMSE-Sum: 3.1000, ProbTS-train/NRMSE: 1.1621, ProbTS-train/NRMSE-Sum: 0.9645, ProbTS-train/ND: 0.8748, ProbTS-train/ND-Sum: 0.7721, ProbTS-train/weighted_ND: 0.8748, ProbTS-train/weighted_ND-Sum: 0.7721, ProbTS-train/QuantileLoss[0.1]: 775.6891, ProbTS-train/QuantileLoss[0.1]-Sum: 434.8461, ProbTS-train/wQuantileLoss[0.1]: 0.4574, ProbTS-train/wQuantileLoss[0.1]-Sum: 0.4076, ProbTS-train/Coverage[0.1]: 0.1343, ProbTS-train/Coverage[0.1]-Sum: 0.2196, ProbTS-train/QuantileLoss[0.2]: 1130.2813, ProbTS-train/QuantileLoss[0.2]-Sum: 626.5213, ProbTS-train/wQuantileLoss[0.2]: 0.6637, ProbTS-train/wQuantileLoss[0.2]-Sum: 0.5854, ProbTS-train/Coverage[0.2]: 0.2190, ProbTS-train/Coverage[0.2]-Sum: 0.3169, ProbTS-train/QuantileLoss[0.3]: 1347.3092, ProbTS-train/QuantileLoss[0.3]-Sum: 747.8124, ProbTS-train/wQuantileLoss[0.3]: 0.7887, ProbTS-train/wQuantileLoss[0.3]-Sum: 0.6957, ProbTS-train/Coverage[0.3]: 0.3102, ProbTS-train/Coverage[0.3]-Sum: 0.4001, ProbTS-train/QuantileLoss[0.4]: 1465.7843, ProbTS-train/QuantileLoss[0.4]-Sum: 816.5640, ProbTS-train/wQuantileLoss[0.4]: 0.8559, ProbTS-train/wQuantileLoss[0.4]-Sum: 0.7557, ProbTS-train/Coverage[0.4]: 0.4074, ProbTS-train/Coverage[0.4]-Sum: 0.4756, ProbTS-train/QuantileLoss[0.5]: 1501.3556, ProbTS-train/QuantileLoss[0.5]-Sum: 839.4771, ProbTS-train/wQuantileLoss[0.5]: 0.8748, ProbTS-train/wQuantileLoss[0.5]-Sum: 0.7721, ProbTS-train/Coverage[0.5]: 0.5073, ProbTS-train/Coverage[0.5]-Sum: 0.5467, ProbTS-train/QuantileLoss[0.6]: 1458.0392, ProbTS-train/QuantileLoss[0.6]-Sum: 818.4435, ProbTS-train/wQuantileLoss[0.6]: 0.8479, ProbTS-train/wQuantileLoss[0.6]-Sum: 0.7468, ProbTS-train/Coverage[0.6]: 0.6064, ProbTS-train/Coverage[0.6]-Sum: 0.6151, ProbTS-train/QuantileLoss[0.7]: 1330.9246, ProbTS-train/QuantileLoss[0.7]-Sum: 751.4471, ProbTS-train/wQuantileLoss[0.7]: 0.7724, ProbTS-train/wQuantileLoss[0.7]-Sum: 0.6785, ProbTS-train/Coverage[0.7]: 0.7011, ProbTS-train/Coverage[0.7]-Sum: 0.6817, ProbTS-train/QuantileLoss[0.8]: 1104.5107, ProbTS-train/QuantileLoss[0.8]-Sum: 631.4520, ProbTS-train/wQuantileLoss[0.8]: 0.6392, ProbTS-train/wQuantileLoss[0.8]-Sum: 0.5610, ProbTS-train/Coverage[0.8]: 0.7896, ProbTS-train/Coverage[0.8]-Sum: 0.7489, ProbTS-train/QuantileLoss[0.9]: 741.4198, ProbTS-train/QuantileLoss[0.9]-Sum: 439.9749, ProbTS-train/wQuantileLoss[0.9]: 0.4265, ProbTS-train/wQuantileLoss[0.9]-Sum: 0.3784, ProbTS-train/Coverage[0.9]: 0.8727, ProbTS-train/Coverage[0.9]-Sum: 0.8220, ProbTS-train/mean_absolute_QuantileLoss: 1206.1460, ProbTS-train/mean_absolute_QuantileLoss-Sum: 678.5043, ProbTS-train/CRPS: 0.7029, ProbTS-train/CRPS-Sum: 0.6202]
-2025-03-12 14:33:29,853 - easytorch-training - INFO - Start validation.
-  0%|          | 0/35 [00:00<?, ?it/s]  0%|          | 0/35 [00:00<?, ?it/s]
-2025-03-12 14:33:29,946 - easytorch-training - ERROR - Traceback (most recent call last):
-  File "/home/kreffert/miniconda3/envs/BasicTS/lib/python3.11/site-packages/easytorch/launcher/launcher.py", line 31, in training_func
-    runner.train(cfg)
-  File "/home/kreffert/Probabilistic_LTSF/BasicTS/basicts/runners/base_epoch_runner.py", line 442, in train
-    self.on_epoch_end(epoch)
-  File "/home/kreffert/Probabilistic_LTSF/BasicTS/basicts/runners/base_epoch_runner.py", line 633, in on_epoch_end
-    self.validate(train_epoch=epoch)
-  File "/home/kreffert/miniconda3/envs/BasicTS/lib/python3.11/site-packages/torch/utils/_contextlib.py", line 115, in decorate_context
-    return func(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^
-  File "/home/kreffert/miniconda3/envs/BasicTS/lib/python3.11/site-packages/easytorch/utils/dist.py", line 102, in wrapper
-    return func(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^
-  File "/home/kreffert/Probabilistic_LTSF/BasicTS/basicts/runners/base_epoch_runner.py", line 484, in validate
-    self.val_iters(iter_index, data)
-  File "/home/kreffert/Probabilistic_LTSF/BasicTS/basicts/runners/base_tsf_runner.py", line 368, in val_iters
-    self.update_epoch_meter(f'val/{metric_name}', metric_item.item())
-                                                  ^^^^^^^^^^^^^^^^
-AttributeError: 'dict' object has no attribute 'item'
-
-Traceback (most recent call last):
-  File "/home/kreffert/Probabilistic_LTSF/BasicTS/experiments/train.py", line 28, in <module>
-    main()
-  File "/home/kreffert/Probabilistic_LTSF/BasicTS/experiments/train.py", line 24, in main
-    basicts.launch_training(args.cfg, args.gpus, node_rank=0)
-  File "/home/kreffert/Probabilistic_LTSF/BasicTS/basicts/launcher.py", line 134, in launch_training
-    easytorch.launch_training(cfg=cfg, devices=gpus, node_rank=node_rank)
-  File "/home/kreffert/miniconda3/envs/BasicTS/lib/python3.11/site-packages/easytorch/launcher/launcher.py", line 86, in launch_training
-    train_dist(cfg)
-  File "/home/kreffert/miniconda3/envs/BasicTS/lib/python3.11/site-packages/easytorch/launcher/launcher.py", line 35, in training_func
-    raise e
-  File "/home/kreffert/miniconda3/envs/BasicTS/lib/python3.11/site-packages/easytorch/launcher/launcher.py", line 31, in training_func
-    runner.train(cfg)
-  File "/home/kreffert/Probabilistic_LTSF/BasicTS/basicts/runners/base_epoch_runner.py", line 442, in train
-    self.on_epoch_end(epoch)
-  File "/home/kreffert/Probabilistic_LTSF/BasicTS/basicts/runners/base_epoch_runner.py", line 633, in on_epoch_end
-    self.validate(train_epoch=epoch)
-  File "/home/kreffert/miniconda3/envs/BasicTS/lib/python3.11/site-packages/torch/utils/_contextlib.py", line 115, in decorate_context
-    return func(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^
-  File "/home/kreffert/miniconda3/envs/BasicTS/lib/python3.11/site-packages/easytorch/utils/dist.py", line 102, in wrapper
-    return func(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^
-  File "/home/kreffert/Probabilistic_LTSF/BasicTS/basicts/runners/base_epoch_runner.py", line 484, in validate
-    self.val_iters(iter_index, data)
-  File "/home/kreffert/Probabilistic_LTSF/BasicTS/basicts/runners/base_tsf_runner.py", line 368, in val_iters
-    self.update_epoch_meter(f'val/{metric_name}', metric_item.item())
-                                                  ^^^^^^^^^^^^^^^^
-AttributeError: 'dict' object has no attribute 'item'. Did you mean: 'items'?

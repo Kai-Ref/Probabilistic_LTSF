@@ -4,7 +4,9 @@ import torch
 import inspect
 import time
 import datetime
+import json
 from tqdm import tqdm
+import numpy as np
 
 from ..base_tsf_runner import BaseTimeSeriesForecastingRunner
 
@@ -40,14 +42,31 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
         print(self.model_name)
         self.use_wandb = cfg['USE_WANDB']
         # start wandb
-        if self.use_wandb:
-            timestamp = datetime.datetime.now().strftime("%b_%d_%H_%M")
-            os.environ["WANDB_API_KEY"] = "fc6544bc618ba7ae3008cf7c53d9650e1668bf12"
-            wandb.init(entity="kai-reffert-university-mannheim",
-                project="Prob_LTSF",  
-            #group=f"DDP_{config['model_name']}_{timestamp}",
-            name=f"{self.distribution_type}_{self.model_name}_{timestamp}",
-            config=cfg)
+        # if self.use_wandb:
+        #     timestamp = datetime.datetime.now().strftime("%b_%d_%H_%M")
+        #     os.environ["WANDB_API_KEY"] = "fc6544bc618ba7ae3008cf7c53d9650e1668bf12"
+        #     wandb.init(entity="kai-reffert-university-mannheim",
+        #         project="Prob_LTSF",  
+        #     #group=f"DDP_{config['model_name']}_{timestamp}",
+        #     name=f"{self.distribution_type}_{self.model_name}_{timestamp}",
+        #     config=cfg)
+
+    def build_scaler(self, cfg: Dict):
+        """Build scaler.
+
+        Args:
+            cfg (Dict): Configuration.
+
+        Returns:
+            Scaler instance or None if no scaler is declared.
+        """
+
+        if 'SCALER' in cfg:
+            if cfg['SCALER']['TYPE'] == 'None':
+                return None
+            else:
+                return cfg['SCALER']['TYPE'](**cfg['SCALER']['PARAM'])
+        return None
 
     def preprocessing(self, input_data: Dict) -> Dict:
         """Preprocess data.
@@ -397,12 +416,12 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
             
             # Log all validation metrics at once
             wandb_dict = {}            
-            # Add training metrics from meter pool
+            # Add metrics from meter pool
             for meter_name in self.meter_pool._pool.keys():
                 if 'val' in meter_name:
                     meter_value = self.meter_pool._pool[meter_name]['meter'].avg
                     wandb_dict[f'epoch_summary/{meter_name}'] = meter_value
-            
+                    wandb_dict[f'{meter_name}'] = meter_value
             wandb.log(wandb_dict, step=global_step)
         
         # print val meters

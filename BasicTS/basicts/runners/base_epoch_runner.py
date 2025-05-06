@@ -329,8 +329,9 @@ class BaseEpochRunner(metaclass=ABCMeta):
             self.load_model(cfg['TRAIN.FINETUNE_FROM'], cfg.get('TRAIN.FINETUNE_STRICT_LOAD', True))
             self.logger.info('Start fine tuning')
 
-        # resume
-        self.load_model_resume()
+        # resume training
+        if cfg['TRAIN.RESUME_TRAINING']:
+            self.load_model_resume()
 
         # init tensorboard(after resume)
         if is_master():
