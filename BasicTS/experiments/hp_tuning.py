@@ -28,7 +28,7 @@ def main():
     else: 
         path = None
     print(path)
-    basicts.launch_sweep(args.cfg, path, args.sweep_id)
+    basicts.launch_sweep(args.cfg, path, args.sweep_id, args.gpus)
     # basicts.launch_training(args.cfg, args.gpus, node_rank=0)
 
 

@@ -3,8 +3,12 @@ metric:
   name: val/loss
   goal: minimize
 parameters:
+  MODEL.NAME: 
+    values: ['PatchTST']
+  DATA_NAME:
+    values: ['ETTh1']
   OUTPUT_LEN:
-    values: [96]
+    values: [192]
   RESCALE:
     values: [True, False]
   NORM_EACH_CHANNEL:
@@ -46,11 +50,12 @@ parameters:
   MODEL.PARAM.decomposition:
     values: [0, 1]
   MODEL.PARAM.kernel_size:
-    values: [8, 16, 32, 64]
+    values: [3, 7, 13, 25, 49]
   MODEL.PARAM.head_type:
     values: ['probabilistic']
   MODEL.PARAM.distribution_type:
-    values: ['gaussian', 'laplace', 'student_t'] #, 'm_gaussian', 'm_lr_gaussian', 'flow']
+    values: ['gaussian', 'laplace', 'student_t', 'flow'] # flow 
+    # values: ['m_gaussian', 'm_lr_gaussian']
 
   # Basic Params
   NUM_EPOCHS:
@@ -60,7 +65,7 @@ parameters:
 
   # SCALER 
   SCALER.TYPE:
-    values: [ZScoreScaler, MinMaxScaler]
+    values: [ZScoreScaler, MinMaxScaler, None]
 
   # OPTIMIZER
   TRAIN.OPTIM.TYPE:
@@ -84,7 +89,9 @@ parameters:
   TRAIN.DATA.BATCH_SIZE:
     values: [16, 32, 64, 128]
   TRAIN.RESUME_TRAINING:
-    values: [False]    
+    values: [False]  
+  TRAIN.EARLY_STOPPING_PATIENCE: 
+    values: 5   
 early_terminate:
   type: hyperband
   min_iter: 2

@@ -98,6 +98,8 @@ class DataGenerator:
         for i in range(n_samples % n_worlds):
             world_sizes[i] += 1
 
+        print(world_sizes)
+
         samples, world_ids = [], []
 
         for world_id, count in enumerate(world_sizes):

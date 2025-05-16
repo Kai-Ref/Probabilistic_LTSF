@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.distributions as dist
+# from .flow_heads import FlowHead
+import math
 
 class BaseDistribution(nn.Module):
     """Abstract base class for different probabilistic heads."""
@@ -86,63 +88,89 @@ class LowRankMultivariateGaussianHead(BaseDistribution):
     def __init__(self, input_dim, output_dim, args):
         """
         Predict a low-rank factorization of the covariance matrix
-        
+       
         Args:
         input_dim: Dimensionality of input features
         output_dim: Dimensionality of the output distribution
         rank: Rank of the low-rank factorization (default is 5)
         """
-        super().__init__(input_dim, output_dim, args) 
-        self.rank = 96
+        super().__init__(input_dim, output_dim, args)
+        self.rank = 30
+        self.output_dim = output_dim
         # Mean prediction layer
         self.mean_layer = nn.Linear(input_dim, output_dim)
-        
+       
         # Low-rank factorization layers
         # V will be output_dim x rank matrix
         # S will be rank-sized vector of scaling factors
         self.V_layer = nn.Linear(input_dim, output_dim * self.rank)
-        self.S_layer = nn.Linear(input_dim, self.rank)
-    
+        self.S_layer = nn.Linear(input_dim, output_dim) #self.rank)
+   
     def forward(self, x):
-        # Predict mean
-        mean = self.mean_layer(x)
-        # Predict low-rank factorization components
-        # Reshape V to be (batch_size, output_dim * var_dim, rank)
-        V = self.V_layer(x).view(x.shape[0], self.output_dim, self.rank)
-
-        # Predict scaling factors with softplus to ensure positivity
-        # Shape will be (batch_size, rank)
-        S = torch.nn.functional.softplus(self.S_layer(x))
-        S = S.unsqueeze(1).repeat(1, V.shape[1], 1)
+        # The shape of x is probably [batch_size, nvars, features]
+        batch_size, nvars, features = x.shape
+        # Reshape x for linear layers: [batch_size*nvars, features]
+        x_flat = x.reshape(-1, features)
         
-        # Combine mean, V, and S into a single tensor
-        # This allows for potential dropout or other operations
-        return torch.cat([
-            mean.unsqueeze(-1),  # First: mean tensor
-            V,     # Second: V matrix
-            S  # Last: scaling factors
-        ], dim=-1)
+        # Predict mean
+        mean = self.mean_layer(x_flat)  # [batch_size*nvars, output_dim]
+        
+        # Predict low-rank factorization components
+        V = self.V_layer(x_flat)  # [batch_size*nvars, output_dim*rank]
+        S = torch.nn.functional.softplus(self.S_layer(x_flat))  # [batch_size*nvars, rank]
+        
+        # Reshape back to include nvars dimension
+        mean = mean.view(batch_size, nvars, -1)  # [batch_size, nvars, output_dim]
+        V = V.view(batch_size, nvars, -1, self.rank)  # [batch_size, nvars, output_dim, rank]
+        S = S.view(batch_size, nvars, self.output_dim)  # [batch_size, nvars, output_dim]
+        
+        # Add dimension for concatenation
+        mean = mean.unsqueeze(-1)  # [batch_size, nvars, output_dim, 1]
+        S = S.unsqueeze(2)  # [batch_size, nvars, 1, rank]
+
+        # Repeat S to match output_dim dimension of V
+        S = S.repeat(1, 1, V.shape[2], 1)  # [batch_size, nvars, output_dim, rank]
+
+        # Now all tensors have shape [batch_size, nvars, output_dim, *]
+        # Concatenate along the last dimension
+        result = torch.cat([
+            mean,  # [batch_size, nvars, output_dim, 1]
+            V,     # [batch_size, nvars, output_dim, rank]
+            S      # [batch_size, nvars, output_dim, rank]
+        ], dim=-1)  # [batch_size, nvars, output_dim, 1 + rank + rank]
+        return result
 
     def __get_dist__(self, prediction):
         distributions = []
         rank = self.rank
-        mean, V_full, S_full = prediction[..., 0], prediction[..., 1:-rank], prediction[..., -rank:]
-        S_full = S_full[:, 0, :, :] #torch.abs(S[:, 0, :, :])
+        prediction = prediction.permute(0,2,1,3)
+        mean = prediction[..., 0]  # [batch_size, nvars, output_dim]
+        V_full = prediction[..., 1:1+rank]  # [batch_size, nvars, output_dim, rank]
+        S_full = prediction[..., 1+rank:]  # [batch_size, nvars, output_dim, rank]
+        
+        # Ensure positive values for variance scaling factors
         S_full = torch.clamp(S_full, min=1e-6)
-        for i in range(prediction.shape[-2]):
-            S = S_full[:, i, :]
-            V = V_full[:, :, i, :]
-            # Q = ensure_positive_definite_matrix(V, S, method='robust_cov')
-            distributions.append(dist.LowRankMultivariateNormal(mean[:, :, i], cov_diag=S, cov_factor=V))
+        for i in range(prediction.shape[1]):  # Loop over nvars
+            # Extract data for this variable
+            var_mean = mean[:, i, :]  # [batch_size, output_dim]
+            var_V = V_full[:, i, :, :]  # [batch_size, output_dim, rank]
+            var_S = S_full[:, i, 0, :]  # [batch_size, rank] - using first output_dim slice for S
+            # Create distribution
+            distributions.append(dist.LowRankMultivariateNormal(
+                var_mean, 
+                cov_factor=var_V, 
+                cov_diag=var_S
+            ))
+            
         return distributions
-
+        
     def sample(self, head_output, num_samples=1):
         """Since slightly different behavior overwrite the sampling function."""
-        batch_size, output_dim, num_series = head_output[..., 0].shape
+        batch_size, output_dim, num_series, _ = head_output.shape
         samples = torch.zeros(num_samples, batch_size, output_dim, num_series, device=head_output.device)
         distributions = self.__get_dist__(head_output)
-        for i, dist in enumerate(distributions):
-            samples[:, :, :, i] = dist.rsample((num_samples,))
+        for i, distribution in enumerate(distributions):
+            samples[:, :, :, i] = distribution.rsample((num_samples,))
         return samples
 
 class GaussianHead(BaseDistribution):
@@ -382,6 +410,231 @@ class DirichletHead(BaseDistribution):
         concentration = torch.clamp(concentration, min=1e-6)
         return dist.Dirichlet(concentration)
 
+DISTRIBUTIONS = {
+            "gaussian": GaussianHead,  # Symmetric, bell-shaped distribution defined by mean (μ) and standard deviation (σ). Suitable for continuous data with normal errors.
+            "laplace": LaplaceHead,  # Similar to Gaussian but with heavier tails. Defined by location (μ) and scale (b). Useful for modeling data with outliers.
+            "student_t": StudentTHead,  # Like Gaussian but with heavier tails, controlled by degrees of freedom (ν). More robust to outliers.
+            "lognormal": LogNormalHead,  # Distribution where the logarithm of the variable is normally distributed. Used for positive, skewed data (e.g., financial returns).
+            "beta": BetaHead,  # Defined on the interval [0,1], controlled by two shape parameters (α, β). Used for modeling probabilities or proportions.
+            "gamma": GammaHead,  # Defined for positive values, controlled by shape (k) and scale (θ). Used for modeling waiting times or rainfall amounts.
+            "weibull": WeibullHead,  # Flexible distribution for modeling lifetimes and reliability analysis, defined by scale (λ) and shape (k).
+            "poisson": PoissonHead,  # Discrete distribution modeling count data (e.g., number of arrivals per time period). Defined by rate (λ).
+            "negative_binomial": NegativeBinomialHead,  # Models overdispersed count data, generalizing Poisson by allowing variance to exceed the mean.
+            "dirichlet": DirichletHead,  # A distribution over probability vectors (e.g., multinomial proportions). Useful in Bayesian modeling and topic modeling.
+            # "quantile": QuantileHead, 
+            # "i_quantile": ImplicitQuantileHead,
+            "m_gaussian": MultivariateGaussianHead,
+            "m_lr_gaussian": LowRankMultivariateGaussianHead,
+            # "flow": FlowHead,
+            }
+
+class GaussianCopulaHead(BaseDistribution):
+    """
+    Gaussian copula head with flexible marginals.
+    - Models dependencies using a Gaussian copula (correlation matrix).
+    - Marginals can be any head from the DISTRIBUTIONS dict.
+    Args (in args dict):
+        marginal_type, marginal_args
+    """
+    def __init__(self, input_dim, output_dim, args):
+        super().__init__(input_dim, output_dim, args)
+        self.output_dim = output_dim
+        self.input_dim = input_dim
+        self.marginal_type = args.get('marginal_type', 'gaussian')
+        self.marginal_args = args.get('marginal_args', {})
+        # Marginal head (shared for all time steps/variables)
+        marginal_class = DISTRIBUTIONS[self.marginal_type]
+        self.marginal_head = marginal_class(input_dim, 96, self.marginal_args)
+        # For the copula: output_dim * (output_dim-1) // 2 parameters for the lower triangle (excluding diagonal)
+        self.corr_param_layer = nn.Linear(input_dim, output_dim * (output_dim - 1) // 2)
+        self.tanh = nn.Tanh()
+
+    def forward(self, x):
+        """
+        Args:
+            x: [batch, output_dim, input_dim] (embedding for each time step or variable)
+        Returns:
+            prediction: torch.Tensor [batch, output_dim, param_dim + corr_dim] (marginal params and copula params stacked)
+        """
+        batch, output_dim, input_dim = x.shape
+        # Marginals
+        marginal_params = self.marginal_head(x)
+        # Copula correlation params
+        corr_params = self.tanh(self.corr_param_layer(x)).unsqueeze(2).repeat(1, 1, self.output_dim, 1)
+        prediction = torch.cat([marginal_params, corr_params], dim=-1)
+        return prediction
+
+    class GaussianCopulaDistribution:
+        def __init__(self, marginal_head, prediction, output_dim):
+            self.marginal_head = marginal_head
+            self.prediction = prediction
+            self.output_dim = output_dim
+            # Unpack
+            param_dim = marginal_head.output_dim if hasattr(marginal_head, 'output_dim') else 2
+            corr_dim = output_dim * (output_dim - 1) // 2
+            self.marginal_params = prediction[..., :param_dim]
+            self.corr_params = prediction[..., param_dim: param_dim + corr_dim]
+            self.corr = self._build_correlation_matrix(self.corr_params)
+
+        def _build_correlation_matrix(self, corr_params):
+            corr = torch.eye(self.output_dim, device=corr_params.device)
+            tril_indices = torch.tril_indices(row=self.output_dim, col=self.output_dim, offset=-1)
+            corr[tril_indices[0], tril_indices[1]] = corr_params
+            corr = corr + corr.T - torch.diag(torch.diag(corr))
+            return corr
+
+            def __get_dist__(self, prediction):
+                distributions = []
+                rank = self.rank
+                mean, V_full, S_full = prediction[..., 0], prediction[..., 1:-rank], prediction[..., -rank:]
+                S_full = S_full[:, 0, :, :] #torch.abs(S[:, 0, :, :])
+                S_full = torch.clamp(S_full, min=1e-6)
+                for i in range(prediction.shape[-2]):
+                    S = S_full[:, i, :]
+                    V = V_full[:, :, i, :]
+                    # Q = ensure_positive_definite_matrix(V, S, method='robust_cov')
+                    distributions.append(dist.LowRankMultivariateNormal(mean[:, :, i], cov_diag=S, cov_factor=V))
+                return distributions
+
+        def sample(self, num_samples=1):
+            # Sample from Gaussian copula
+            mvn = dist.MultivariateNormal(torch.zeros(self.output_dim, device=self.corr.device), covariance_matrix=self.corr)
+            z = mvn.sample((num_samples,))  # [num_samples, output_dim]
+            u = dist.Normal(0, 1).cdf(z)
+            # Transform to marginals
+            samples = []
+            for v in range(self.output_dim):
+                dist_v = self.marginal_head.__get_dist__(self.marginal_params[:, v, ...])
+                samples.append(dist_v.icdf(u[..., v]))
+            samples = torch.stack(samples, dim=-1)
+            return samples
+
+        def rsample(self, num_samples=1):
+            return self.sample(num_samples)
+
+        def log_prob(self, target):
+            # Transform to uniforms
+            u = []
+            log_marginals = 0
+            for v in range(self.output_dim):
+                dist_v = self.marginal_head.__get_dist__(self.marginal_params[:, v, ...])
+                u_v = dist_v.cdf(target[:, v])
+                u.append(u_v)
+                log_marginals = log_marginals + dist_v.log_prob(target[:, v])
+            u = torch.stack(u, dim=1)
+            # Inverse normal CDF
+            z = dist.Normal(0, 1).icdf(u)
+            # Copula log density
+            mvn = dist.MultivariateNormal(torch.zeros(self.output_dim, device=self.corr.device), covariance_matrix=self.corr)
+            log_copula = mvn.log_prob(z) - z.pow(2).sum(dim=1) * 0.5 + 0.5 * self.output_dim * math.log(2 * math.pi)
+            return log_marginals + log_copula
+
+    def __get_dist__(self, prediction):
+        return self.GaussianCopulaDistribution(self.marginal_head, prediction, self.output_dim)
+
+    def sample(self, head_output, num_samples=1):
+        dist = self.__get_dist__(head_output)
+        return dist.sample(num_samples=num_samples)
+
+class StudentTCopulaHead(BaseDistribution):
+    """
+    Student-t copula head with flexible marginals.
+    - Models dependencies using a Student-t copula (correlation matrix + df).
+    - Marginals can be any head from the DISTRIBUTIONS dict.
+    Args (in args dict):
+        marginal_type, marginal_args, df
+    """
+    def __init__(self, input_dim, output_dim, args):
+        super().__init__(input_dim, output_dim, args)
+        self.output_dim = output_dim
+        self.input_dim = input_dim
+        self.marginal_type = args.get('marginal_type', 'gaussian')
+        self.marginal_args = args.get('marginal_args', {})
+        self.df = args.get('df', 4.0)
+        marginal_class = DISTRIBUTIONS[self.marginal_type]
+        self.marginal_head = marginal_class(input_dim, 1, self.marginal_args)
+        self.corr_param_layer = nn.Linear(input_dim, output_dim * (output_dim - 1) // 2)
+        self.tanh = nn.Tanh()
+
+    def forward(self, x):
+        batch, output_dim, input_dim = x.shape
+        marginal_params = []
+        for d in range(output_dim):
+            marginal_params.append(self.marginal_head(x[:, d, :].unsqueeze(1)))
+        if isinstance(marginal_params[0], torch.Tensor):
+            marginal_params = torch.cat(marginal_params, dim=1)
+        else:
+            marginal_params = torch.cat(marginal_params, dim=-1)
+        corr_params = self.tanh(self.corr_param_layer(x.mean(dim=1)))
+        df_tensor = torch.full((batch, 1), self.df, device=x.device)
+        prediction = torch.cat([marginal_params, corr_params.unsqueeze(1).expand(-1, output_dim, -1), df_tensor.unsqueeze(1).expand(-1, output_dim, -1)], dim=-1)
+        return prediction
+
+    class StudentTCopulaDistribution:
+        def __init__(self, marginal_head, prediction, output_dim):
+            self.marginal_head = marginal_head
+            self.prediction = prediction
+            self.output_dim = output_dim
+            param_dim = marginal_head.output_dim if hasattr(marginal_head, 'output_dim') else 2
+            corr_dim = output_dim * (output_dim - 1) // 2
+            self.marginal_params = prediction[..., :param_dim]
+            self.corr_params = prediction[0, 0, param_dim: param_dim + corr_dim]
+            self.df = prediction[0, 0, -1].item()
+            self.corr = self._build_correlation_matrix(self.corr_params)
+
+        def _build_correlation_matrix(self, corr_params):
+            corr = torch.eye(self.output_dim, device=corr_params.device)
+            tril_indices = torch.tril_indices(row=self.output_dim, col=self.output_dim, offset=-1)
+            corr[tril_indices[0], tril_indices[1]] = corr_params
+            corr = corr + corr.T - torch.diag(torch.diag(corr))
+            return corr
+
+        def sample(self, num_samples=1):
+            # Sample from Student-t copula
+            # Use the Gaussian copula logic, but scale by sqrt(df / chi2)
+            g = torch.randn(num_samples, self.output_dim, device=self.corr.device)
+            chi2 = torch.distributions.Chi2(self.df).sample((num_samples,)).to(self.corr.device)
+            z = g / torch.sqrt(chi2.unsqueeze(-1) / self.df)
+            L = torch.linalg.cholesky(self.corr)
+            z = z @ L.T
+            u = dist.StudentT(self.df).cdf(z)
+            samples = []
+            for v in range(self.output_dim):
+                dist_v = self.marginal_head.__get_dist__(self.marginal_params[:, v, ...])
+                samples.append(dist_v.icdf(u[..., v]))
+            samples = torch.stack(samples, dim=-1)
+            return samples
+
+        def rsample(self, num_samples=1):
+            return self.sample(num_samples)
+
+        def log_prob(self, target):
+            # Transform to uniforms
+            u = []
+            log_marginals = 0
+            for v in range(self.output_dim):
+                dist_v = self.marginal_head.__get_dist__(self.marginal_params[:, v, ...])
+                u_v = dist_v.cdf(target[:, v])
+                u.append(u_v)
+                log_marginals = log_marginals + dist_v.log_prob(target[:, v])
+            u = torch.stack(u, dim=1)
+            # Inverse t CDF
+            z = dist.StudentT(self.df).icdf(u)
+            # Copula log density (approximate, as torch does not have multivariate StudentT)
+            # Use the formula for the density of the multivariate t copula
+            # log_copula = ... (implement if needed)
+            # For now, return only marginal log-prob
+            return log_marginals
+
+    def __get_dist__(self, prediction):
+        return self.StudentTCopulaDistribution(self.marginal_head, prediction, self.output_dim)
+
+    def sample(self, head_output, num_samples=1):
+        dist = self.__get_dist__(head_output)
+        return dist.sample(num_samples=num_samples)
+
+
+
 class CopulaHead(BaseDistribution):
     """
     Attention-based copula head with flexible marginals.
@@ -393,7 +646,7 @@ class CopulaHead(BaseDistribution):
     """
     def __init__(self, input_dim, output_dim, args):
         super().__init__(input_dim, output_dim, args)
-        self.output_dim = output_dim
+        self.output_dim = output_dim # prediction length
         self.input_dim = input_dim
         self.attention_heads = args.get('attention_heads', 2)
         self.attention_layers = args.get('attention_layers', 2)
@@ -407,25 +660,8 @@ class CopulaHead(BaseDistribution):
         self.marginal_args = args.get('marginal_args', {})
 
         # Marginal head (shared for all variables, but can be extended to per-variable)
-        DISTRIBUTIONS = {
-        "gaussian": GaussianHead,  # Symmetric, bell-shaped distribution defined by mean (μ) and standard deviation (σ). Suitable for continuous data with normal errors.
-        "laplace": LaplaceHead,  # Similar to Gaussian but with heavier tails. Defined by location (μ) and scale (b). Useful for modeling data with outliers.
-        "student_t": StudentTHead,  # Like Gaussian but with heavier tails, controlled by degrees of freedom (ν). More robust to outliers.
-        "lognormal": LogNormalHead,  # Distribution where the logarithm of the variable is normally distributed. Used for positive, skewed data (e.g., financial returns).
-        "beta": BetaHead,  # Defined on the interval [0,1], controlled by two shape parameters (α, β). Used for modeling probabilities or proportions.
-        "gamma": GammaHead,  # Defined for positive values, controlled by shape (k) and scale (θ). Used for modeling waiting times or rainfall amounts.
-        "weibull": WeibullHead,  # Flexible distribution for modeling lifetimes and reliability analysis, defined by scale (λ) and shape (k).
-        "poisson": PoissonHead,  # Discrete distribution modeling count data (e.g., number of arrivals per time period). Defined by rate (λ).
-        "negative_binomial": NegativeBinomialHead,  # Models overdispersed count data, generalizing Poisson by allowing variance to exceed the mean.
-        "dirichlet": DirichletHead,  # A distribution over probability vectors (e.g., multinomial proportions). Useful in Bayesian modeling and topic modeling.
-        "quantile": QuantileHead, 
-        "i_quantile": ImplicitQuantileHead,
-        "m_gaussian": MultivariateGaussianHead,
-        "m_lr_gaussian": LowRankMultivariateGaussianHead,
-        "flow": FlowHead
-        }
         marginal_class = DISTRIBUTIONS[self.marginal_type]
-        self.marginal_head = marginal_class(input_dim, 1, self.marginal_args)
+        self.marginal_head = marginal_class(input_dim, output_dim, self.marginal_args)
 
         # Attention copula as before
         self.dimension_shifting_layer = nn.Linear(self.input_dim, self.attention_heads * self.attention_dim)
@@ -466,6 +702,7 @@ class CopulaHead(BaseDistribution):
         self.dist_extractors = _easy_mlp(
             self.attention_heads * self.attention_dim, self.mlp_dim, self.resolution, self.mlp_layers, nn.ReLU
         )
+        
 
     def forward(self, x):
         """
@@ -474,19 +711,10 @@ class CopulaHead(BaseDistribution):
         Returns:
             prediction: torch.Tensor [batch, output_dim, param_dim] (marginal params and copula logits stacked)
         """
-        batch, output_dim, input_dim = x.shape
-        # Marginal params for each variable
-        marginal_params = []
-        for v in range(output_dim):
-            marginal_params.append(self.marginal_head(x[:, v, :].unsqueeze(1)))  # [batch, 1, ...]
-        # Stack to [batch, output_dim, ...]
-        if isinstance(marginal_params[0], torch.Tensor):
-            marginal_params = torch.cat(marginal_params, dim=1)  # [batch, output_dim, param_dim]
-        else:
-            # If marginal returns tuple (e.g., for quantile), stack each element
-            marginal_params = tuple(torch.cat([mp[i] for mp in marginal_params], dim=1) for i in range(len(marginal_params[0])))
-        # Copula logits (as before)
-        u = torch.zeros(batch, output_dim, 1, device=x.device)
+        batch, num_series, input_dim = x.shape
+        marginal_params = self.marginal_head(x) # [batch, num_series, output_dim, param_dim]
+        
+        u = torch.zeros(batch, num_series, self.output_dim, device=x.device)
         key_value_input = torch.cat([x, u], dim=2)
         att_value = self.dimension_shifting_layer(x)
         for layer in range(self.attention_layers):
@@ -512,7 +740,9 @@ class CopulaHead(BaseDistribution):
         # Stack all outputs into a single tensor for compatibility
         if isinstance(marginal_params, tuple):
             # For tuple marginals, stack along last dim
-            marginal_params = torch.cat(marginal_params, dim=-1)  # [batch, output_dim, total_param_dim]
+            marginal_params = torch.cat(marginal_params.squeeze(-1), dim=-1)  # [batch, output_dim, total_param_dim]
+        print(marginal_params.shape)
+        print(logits.shape)
         prediction = torch.cat([marginal_params, logits], dim=-1)  # [batch, output_dim, total_param_dim + resolution]
         return prediction
 

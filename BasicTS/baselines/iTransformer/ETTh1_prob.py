@@ -22,7 +22,7 @@ RESCALE = regular_settings['RESCALE'] # Whether to rescale the data
 NULL_VAL = regular_settings['NULL_VAL'] # Null value in the data
 # Model architecture and parameters
 MODEL_ARCH = iTransformer
-NUM_NODES = 321
+NUM_NODES = 160
 MODEL_PARAM = {
     "enc_in": NUM_NODES,                        # num nodes
     "dec_in": NUM_NODES,
@@ -30,7 +30,7 @@ MODEL_PARAM = {
     "seq_len": INPUT_LEN,
     "label_len": INPUT_LEN/2,       # start token length used in decoder
     "pred_len": OUTPUT_LEN,         # prediction sequence length
-    "factor": 3, # attn factor
+    "factor": 7, # attn factor
     "p_hidden_dims": [128, 128],
     "p_hidden_layers": 2,
     "d_model": 512,
@@ -53,7 +53,7 @@ MODEL_PARAM = {
     "day_of_month_size": 31,
     "day_of_year_size": 366,
     "head_type": "probabilistic",
-    "distribution_type": "student_t", 
+    "distribution_type": "m_lr_gaussian", 
     "quantiles": [],#[0.1, 0.5, 0.9],
     }
 NUM_EPOCHS = 100
@@ -65,6 +65,8 @@ CFG.DESCRIPTION = 'An Example Config'
 CFG.GPU_NUM = 1 # Number of GPUs to use (0 for CPU mode)
 # Runner
 CFG.RUNNER = SimpleProbTimeSeriesForecastingRunner
+
+CFG.USE_WANDB = False
 
 ############################## Dataset Configuration ##############################
 CFG.DATASET = EasyDict()
@@ -106,18 +108,20 @@ CFG.METRICS = EasyDict()
 CFG.METRICS.FUNCS = EasyDict({'NLL': nll_loss,
                             #'MAE': masked_mae,
                             #'MSE': masked_mse,
-                            #'CRPS': crps,
+                            'CRPS': crps,
                             #'QL': quantile_loss,
                             # 'Evaluator': Evaluator(distribution_type=MODEL_PARAM['distribution_type'], 
                             #                        quantiles=MODEL_PARAM['quantiles']),
-                            'Val_Evaluator': Evaluator(distribution_type=MODEL_PARAM['distribution_type'], 
-                                                   quantiles=MODEL_PARAM['quantiles']),  # only use the evaluator during validation/testing iters
+                            # 'Val_Evaluator': Evaluator(distribution_type=MODEL_PARAM['distribution_type'], 
+                            #                        quantiles=MODEL_PARAM['quantiles']),  # only use the evaluator during validation/testing iters
                             })
 CFG.METRICS.TARGET = 'NLL'
 CFG.METRICS.NULL_VAL = NULL_VAL
 
 ############################## Training Configuration ##############################
 CFG.TRAIN = EasyDict()
+CFG.TRAIN.RESUME_TRAINING = False
+CFG.TRAIN.EARLY_STOPPING_PATIENCE = 5
 CFG.TRAIN.NUM_EPOCHS = NUM_EPOCHS
 CFG.TRAIN.CKPT_SAVE_DIR = os.path.join(
     'checkpoints',

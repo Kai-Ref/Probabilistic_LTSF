@@ -32,9 +32,9 @@ MODEL_PARAM = {
     'use_ts_id'   : True,
     'id_feat_size': 32,
     'num_nodes': 7,
-    #"head_type": "probabilistic", -> for DeepAR there are only probabilistic head types!
-    "distribution_type": "quantile", 
-    "quantiles": [0.1, 0.5, 0.9],
+    # "head_type": "probabilistic", #-> for DeepAR there are only probabilistic head types!
+    "distribution_type": "flow", 
+    "quantiles": [],
     }
 NUM_EPOCHS = 100
 
@@ -45,6 +45,8 @@ CFG.DESCRIPTION = 'An Example Config'
 CFG.GPU_NUM = 1 # Number of GPUs to use (0 for CPU mode)
 # Runner
 CFG.RUNNER = SimpleProbTimeSeriesForecastingRunner #DeepARRunner
+
+CFG.USE_WANDB = False
 
 ############################## Dataset Configuration ##############################
 CFG.DATASET = EasyDict()
@@ -83,28 +85,30 @@ CFG.MODEL.TARGET_FEATURES = [0]
 
 CFG.METRICS = EasyDict()
 # Metrics settings
-CFG.METRICS.FUNCS = EasyDict({#'NLL': nll_loss,
+CFG.METRICS.FUNCS = EasyDict({'NLL': nll_loss,
                             #'MAE': masked_mae,
                             #'MSE': masked_mse,
-                            #'CRPS': crps,
-                            'QL': quantile_loss,
+                            'CRPS': crps,
+                            # 'QL': quantile_loss,
                             # 'Evaluator': Evaluator(distribution_type=MODEL_PARAM['distribution_type'], 
                             #                        quantiles=MODEL_PARAM['quantiles']),
-                            'Val_Evaluator': Evaluator(distribution_type=MODEL_PARAM['distribution_type'], 
-                                                   quantiles=MODEL_PARAM['quantiles']),  # only use the evaluator during validation/testing iters
+                            # 'Val_Evaluator': Evaluator(distribution_type=MODEL_PARAM['distribution_type'], 
+                            #                        quantiles=MODEL_PARAM['quantiles']),  # only use the evaluator during validation/testing iters
                             })
-CFG.METRICS.TARGET = 'QL'
+CFG.METRICS.TARGET = 'NLL'
 CFG.METRICS.NULL_VAL = NULL_VAL
 
 ############################## Training Configuration ##############################
 CFG.TRAIN = EasyDict()
+CFG.TRAIN.RESUME_TRAINING = False
+CFG.TRAIN.EARLY_STOPPING_PATIENCE = 5
 CFG.TRAIN.NUM_EPOCHS = NUM_EPOCHS
 CFG.TRAIN.CKPT_SAVE_DIR = os.path.join(
     'checkpoints',
     f'{MODEL_PARAM["distribution_type"]}_{MODEL_ARCH.__name__}',
     '_'.join([DATA_NAME, str(CFG.TRAIN.NUM_EPOCHS), str(INPUT_LEN), str(OUTPUT_LEN)])
 )
-CFG.TRAIN.LOSS = quantile_loss
+CFG.TRAIN.LOSS = nll_loss
 # Optimizer settings
 CFG.TRAIN.OPTIM = EasyDict()
 CFG.TRAIN.OPTIM.TYPE = "Adam"

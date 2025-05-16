@@ -23,6 +23,7 @@ class ProbabilisticHead(nn.Module):
         "m_lr_gaussian": LowRankMultivariateGaussianHead,
         "flow": FlowHead,
         "copula": CopulaHead,  # Copula-based multivariate head (see args for copula/marginal config)
+        "gcopula": GaussianCopulaHead,  # Copula-based multivariate head (see args for copula/marginal config)
     }
 
     def __init__(self, input_dim, output_dim, distribution_type="gaussian", quantiles=[]):

@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from prob.prob_head import ProbabilisticHead
 
 
 class moving_avg(nn.Module):
@@ -53,19 +54,34 @@ class DLinear(nn.Module):
         self.individual = model_args["individual"]
         self.channels = model_args["enc_in"]
 
+        self.head_type = model_args['head_type']
+
         if self.individual:
             self.Linear_Seasonal = nn.ModuleList()
             self.Linear_Trend = nn.ModuleList()
+
+            if self.head_type == 'probabilistic':
+                distribution_type = model_args['distribution_type']
+                quantiles = model_args['quantiles']
+                self.Heads = nn.ModuleList()
 
             for i in range(self.channels):
                 self.Linear_Seasonal.append(
                     nn.Linear(self.seq_len, self.pred_len))
                 self.Linear_Trend.append(
                     nn.Linear(self.seq_len, self.pred_len))
+                if self.head_type == 'probabilistic':
+                    self.Heads.append(
+                    ProbabilisticHead(self.pred_len, self.pred_len, distribution_type=distribution_type, quantiles=quantiles))
 
         else:
             self.Linear_Seasonal = nn.Linear(self.seq_len, self.pred_len)
             self.Linear_Trend = nn.Linear(self.seq_len, self.pred_len)
+            if self.head_type == 'probabilistic':
+                distribution_type = model_args['distribution_type']
+                quantiles = model_args['quantiles']
+                self.head = ProbabilisticHead(self.pred_len, self.pred_len, distribution_type=distribution_type, quantiles=quantiles)
+        
 
     def forward(self, history_data: torch.Tensor, future_data: torch.Tensor, batch_seen: int, epoch: int, train: bool, **kwargs) -> torch.Tensor:
         """Feed forward of DLinear.
@@ -97,4 +113,17 @@ class DLinear(nn.Module):
             trend_output = self.Linear_Trend(trend_init)
 
         prediction = seasonal_output + trend_output
-        return prediction.permute(0, 2, 1).unsqueeze(-1)  # [B, L, N, 1]
+        # after the normal calulation append the probabilistic head
+        if self.head_type == 'probabilistic':
+            # the individual heads also have to be modelled differently
+            if self.individual:
+                predictions = []
+                for i in range(self.channels):
+                    out = self.Heads[i](prediction[:, i, :]).unsqueeze(1)
+                    predictions.append(out)
+                prediction = torch.cat(predictions, dim=1)
+            else: 
+                prediction = self.head(prediction)
+            return prediction.permute(0, 2, 1, 3) # [B, L, N, Params]
+        else: 
+            return prediction.permute(0, 2, 1).unsqueeze(-1)  # [B, L, N, 1]
