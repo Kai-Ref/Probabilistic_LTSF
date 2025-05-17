@@ -275,6 +275,30 @@ def fill_dependencies(override_config, model_name='PatchTST', data_name='ETTh1')
             'RESCALE': ['SCALER.PARAM.rescale'],
             # 'NULL_VAL': ['METRICS.NULL_VAL'],
         }
+    elif model_name == 'DeepAR':
+        dependency_dict = {
+            # Core parameters and their dependencies
+            'DATA_NAME': [
+                'DATASET.NAME',
+                'DATASET.PARAM.dataset_name',
+                'SCALER.PARAM.dataset_name'
+            ],
+            'INPUT_LEN': [
+                'DATASET.PARAM.input_len'
+            ],
+            'OUTPUT_LEN': [
+                'DATASET.PARAM.output_len'
+            ],
+            # 'TRAIN_VAL_TEST_RATIO': [
+            #     'DATASET.PARAM.train_val_test_ratio',
+            #     'SCALER.PARAM.train_ratio'
+            # ],
+            # 'NUM_NODES': ['MODEL.PARAM.enc_in'],
+            'NUM_EPOCHS': ['TRAIN.NUM_EPOCHS'],
+            'NORM_EACH_CHANNEL': ['SCALER.PARAM.norm_each_channel'],
+            'RESCALE': ['SCALER.PARAM.rescale'],
+            # 'NULL_VAL': ['METRICS.NULL_VAL'],
+        }
     else:
         raise ValueError(f"Unsupported model: {model_name}")
     
@@ -293,6 +317,11 @@ def fill_dependencies(override_config, model_name='PatchTST', data_name='ETTh1')
             layer_size = expanded_config.get('MODEL.PARAM.p_hidden_dim_size', 128)
             # Create a list with the same size for each layer
             expanded_config['MODEL.PARAM.p_hidden_dims'] = [layer_size] * p_layers
+    if model_name == 'DeepAR':
+        number_cov_features = expanded_config['MODEL.PARAM.cov_feat_size']
+        expanded_config['MODEL.FORWARD_FEATURES'] = list(range(number_cov_features + 1))
+
+
 
     # specialized overrides
     # CKPT path
