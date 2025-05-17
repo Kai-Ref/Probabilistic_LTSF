@@ -140,47 +140,47 @@ def launch_training(cfg: Union[Dict, str],
     # launch the training process
     easytorch.launch_training(cfg=cfg, devices=gpus, node_rank=node_rank)
 
-# def training_func(cfg: Dict, gpus: Optional[str] = None, node_rank:int = 0, wandb_run=None) -> Dict:
-#     """
-#     Starts the training process.
+def training_func(cfg: Dict, gpus: Optional[str] = None, node_rank:int = 0, wandb_run=None) -> Dict:
+    """
+    Starts the training process.
 
-#     This function performs the following steps:
-#     1. Initializes the runner specified in the configuration (`cfg`).
-#     2. Sets up training according to the configuration.
-#     3. Executes the training pipeline.
-#     4. Returns the best metrics if available.
+    This function performs the following steps:
+    1. Initializes the runner specified in the configuration (`cfg`).
+    2. Sets up training according to the configuration.
+    3. Executes the training pipeline.
+    4. Returns the best metrics if available.
 
-#     Args:
-#         cfg (Dict): EasyTorch configuration dictionary.
-#         wandb_run: The wandb run object if being used with wandb sweeps.
+    Args:
+        cfg (Dict): EasyTorch configuration dictionary.
+        wandb_run: The wandb run object if being used with wandb sweeps.
 
-#     Returns:
-#         Dict: Best metrics from training (if available).
+    Returns:
+        Dict: Best metrics from training (if available).
 
-#     Raises:
-#         Exception: Catches any exception, logs the traceback, and re-raises it.
-#     """
+    Raises:
+        Exception: Catches any exception, logs the traceback, and re-raises it.
+    """
     
-#     # launch the training process
-#     def count_devices(devices_str):
-#         if not devices_str:
-#             return 0
-#         # Split by comma and filter out empty strings
-#         devices_list = [d.strip() for d in devices_str.split(',') if d.strip()]
-#         return len(devices_list)
+    # launch the training process
+    def count_devices(devices_str):
+        if not devices_str:
+            return 0
+        # Split by comma and filter out empty strings
+        devices_list = [d.strip() for d in devices_str.split(',') if d.strip()]
+        return len(devices_list)
 
-#     device_count = count_devices(gpus)
-#     if device_count > cfg['GPU_NUM']:
-#         print(f"Switching in training_func from {cfg['GPU_NUM']} gpus to {device_count}")
-#         cfg['GPU_NUM'] = device_count
-#     easytorch.launch_training(cfg=cfg, devices=gpus, node_rank=node_rank)
+    device_count = count_devices(gpus)
+    if device_count > cfg['GPU_NUM']:
+        print(f"Switching in training_func from {cfg['GPU_NUM']} gpus to {device_count}")
+        cfg['GPU_NUM'] = device_count
+    easytorch.launch_training(cfg=cfg, devices=gpus, node_rank=node_rank)
 
-    # # initialize the runner
+    # initialize the runner
     # logger = get_logger('easytorch-launcher')
     # logger.info(f"Initializing runner '{cfg['RUNNER']}'")
     # runner = cfg['RUNNER'](cfg)
     
-    # # If a wandb run is passed, store it in the runner for use during training
+    # If a wandb run is passed, store it in the runner for use during training
     # if wandb_run is not None:
     #     runner.wandb_run = wandb_run
 
@@ -419,86 +419,86 @@ def launch_sweep(cfg: Union[Dict, str],
 
 
 
-def training_func(cfg: Dict, gpus: Optional[str] = None, node_rank: int = 0, wandb_run=None) -> Dict:
-    import os
-    import torch.distributed as dist
-    from easytorch.launcher.dist_wrap import dist_wrap
-    from easytorch.utils import get_logger
+# def training_func(cfg: Dict, gpus: Optional[str] = None, node_rank: int = 0, wandb_run=None) -> Dict:
+#     import os
+#     import torch.distributed as dist
+#     from easytorch.launcher.dist_wrap import dist_wrap
+#     from easytorch.utils import get_logger
 
-    def count_devices(devices_str):
-        if not devices_str:
-            return 0
-        return len([d.strip() for d in devices_str.split(',') if d.strip()])
+#     def count_devices(devices_str):
+#         if not devices_str:
+#             return 0
+#         return len([d.strip() for d in devices_str.split(',') if d.strip()])
 
-    device_count = count_devices(gpus)
-    if device_count > 0 and device_count != cfg.get('GPU_NUM', 0):
-        logger = get_logger('easytorch-sweep-agent')
-        logger.info(f"Switching in training_func from {cfg.get('GPU_NUM', 0)} gpus to {device_count}")
-        cfg['GPU_NUM'] = device_count
+#     device_count = count_devices(gpus)
+#     if device_count > 0 and device_count != cfg.get('GPU_NUM', 0):
+#         logger = get_logger('easytorch-sweep-agent')
+#         logger.info(f"Switching in training_func from {cfg.get('GPU_NUM', 0)} gpus to {device_count}")
+#         cfg['GPU_NUM'] = device_count
 
-    from functools import partial
+#     from functools import partial
 
-    world_size = cfg.get('GPU_NUM', 1)
+#     world_size = cfg.get('GPU_NUM', 1)
 
-    dist_train = dist_wrap(
-        partial(wrapped_training_func, world_size=world_size, cfg=cfg, wandb_run=wandb_run),
-        node_num=cfg.get('DIST_NODE_NUM', 1),
-        device_num=world_size,
-        node_rank=node_rank,
-        dist_backend=cfg.get('DIST_BACKEND', 'nccl'),
-        init_method=cfg.get('DIST_INIT_METHOD', None)
-    )
+#     dist_train = dist_wrap(
+#         partial(wrapped_training_func, world_size=world_size, cfg=cfg, wandb_run=wandb_run),
+#         node_num=cfg.get('DIST_NODE_NUM', 1),
+#         device_num=world_size,
+#         node_rank=node_rank,
+#         dist_backend=cfg.get('DIST_BACKEND', 'nccl'),
+#         init_method=cfg.get('DIST_INIT_METHOD', None)
+#     )
 
-    return dist_train(cfg)
+#     return dist_train(cfg)
 
 
 
-# At the top level of the file (same as training_func)
-def wrapped_training_func(rank: int, world_size: int, cfg: Dict, wandb_run):
-    import wandb
-    import os
-    from easytorch.utils import get_logger
+# # At the top level of the file (same as training_func)
+# def wrapped_training_func(rank: int, world_size: int, cfg: Dict, wandb_run):
+#     import wandb
+#     import os
+#     from easytorch.utils import get_logger
 
-    # Only initialize wandb in the main process (rank 0)
-    if rank == 0 and cfg.get('USE_WANDB', False):
-        os.environ["WANDB_SPAWN_METHOD"] = "thread"
-        if wandb_run is None and not wandb.run:
-            wandb.init(
-                project=cfg.get('WANDB_PROJECT', 'Prob_LTSF'),
-                config=cfg,
-                reinit=True
-            )
-        elif wandb_run is not None and not wandb.run:
-            wandb.init(
-                id=wandb_run.id,
-                resume="allow",
-                project=cfg.get('WANDB_PROJECT', 'Prob_LTSF'),
-                config=cfg
-            )
+#     # Only initialize wandb in the main process (rank 0)
+#     if rank == 0 and cfg.get('USE_WANDB', False):
+#         os.environ["WANDB_SPAWN_METHOD"] = "thread"
+#         if wandb_run is None and not wandb.run:
+#             wandb.init(
+#                 project=cfg.get('WANDB_PROJECT', 'Prob_LTSF'),
+#                 config=cfg,
+#                 reinit=True
+#             )
+#         elif wandb_run is not None and not wandb.run:
+#             wandb.init(
+#                 id=wandb_run.id,
+#                 resume="allow",
+#                 project=cfg.get('WANDB_PROJECT', 'Prob_LTSF'),
+#                 config=cfg
+#             )
 
-    logger = get_logger('easytorch-launcher')
-    logger.info(f"Initializing runner '{cfg['RUNNER']}'")
-    runner = cfg['RUNNER'](cfg)
-    runner.init_logger(logger_name='easytorch-training', log_file_name='training_log')
-    runner.rank = rank
-    print(f"MY RUNNERS RANK {runner.rank}")
+#     logger = get_logger('easytorch-launcher')
+#     logger.info(f"Initializing runner '{cfg['RUNNER']}'")
+#     runner = cfg['RUNNER'](cfg)
+#     runner.init_logger(logger_name='easytorch-training', log_file_name='training_log')
+#     runner.rank = rank
+#     print(f"MY RUNNERS RANK {runner.rank}")
 
-    if hasattr(runner, 'need_setup_graph') and runner.need_setup_graph:
-        runner.setup_graph(cfg=cfg, train=True)
+#     if hasattr(runner, 'need_setup_graph') and runner.need_setup_graph:
+#         runner.setup_graph(cfg=cfg, train=True)
 
-    if rank == 0 and cfg.get('USE_WANDB', False):
-        runner.wandb_run = wandb.run
+#     if rank == 0 and cfg.get('USE_WANDB', False):
+#         runner.wandb_run = wandb.run
 
-    best_metrics = {}
-    try:
-        best_metrics = runner.train(cfg=cfg)
-        if rank == 0 and cfg.get('USE_WANDB', False) and wandb.run:
-            for metric_name, metric_value in best_metrics.items():
-                wandb.log({f"best_{metric_name}": metric_value})
-    except Exception as e:
-        import traceback
-        runner.logger.error(traceback.format_exc())
-        raise e
+#     best_metrics = {}
+#     try:
+#         best_metrics = runner.train(cfg=cfg)
+#         if rank == 0 and cfg.get('USE_WANDB', False) and wandb.run:
+#             for metric_name, metric_value in best_metrics.items():
+#                 wandb.log({f"best_{metric_name}": metric_value})
+#     except Exception as e:
+#         import traceback
+#         runner.logger.error(traceback.format_exc())
+#         raise e
 
-    return best_metrics
+#     return best_metrics
 

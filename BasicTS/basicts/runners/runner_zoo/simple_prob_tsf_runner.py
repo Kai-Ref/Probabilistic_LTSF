@@ -326,7 +326,7 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
                 if self.use_wandb and iter_index % 10 == 0:
                     wandb_dict[f'train/{metric_name}'] = metric_item.item()
                     
-        if (self.rank == 0) and (self.use_wandb) and (iter_index % 10 == 0):   
+        if (self.use_wandb) and (iter_index % 10 == 0):   
             wandb.log(wandb_dict, step=iter_num)
         return loss
 
@@ -410,7 +410,7 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
         self.update_epoch_meter('val/time', val_end_time - val_start_time)
         
         # Now log validation averages to wandb
-        if (self.rank == 0) and (self.use_wandb) and (train_epoch is not None):
+        if (self.use_wandb) and (train_epoch is not None):
             # Calculate proper global step at end of validation
             global_step = train_epoch * self.iter_per_epoch
             
@@ -474,7 +474,7 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
                 metrics_results['overall'][metric_name] = metric_item.item()
                 if self.use_wandb:
                     wandb_dict[f'test/{metric_name}'] = metric_item.item()
-        if (self.rank == 0) and (self.use_wandb) and (self.use_wandb):   
+        if (self.use_wandb) and (self.use_wandb):   
             # If we're in the training process, use the current global step
             if hasattr(self, 'current_epoch') and self.current_epoch is not None:
                 global_step = self.current_epoch * self.iter_per_epoch
@@ -550,7 +550,7 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
             epoch (int): The current epoch number.
         """
         # Log epoch summary to wandb
-        if (self.rank == 0) and (self.use_wandb):
+        if (self.use_wandb):
             global_step = epoch * self.iter_per_epoch
             # Create summary dict with averages
             wandb_dict = {

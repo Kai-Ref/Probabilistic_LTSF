@@ -19,16 +19,16 @@ DATASET_NAME="ETTh1_prob"
 # PatchTST
 MODEL_NAME="PatchTST"
 # regular settings - 96
-# SweepID='4j6sm6dg' # -96
+# SweepID='4j6sm6dg' # -96 -> maybe have to do that again because Scaler/Filler params did not adjust?
 SweepID='6mxvo502' # - 192
 # SweepID='' # - 336
-# SweepID='' # - 720
+# SweepID='js2yngzt' # - 720
 
 # iTransformer
 # MODEL_NAME="iTransformer"
-# regular settings - 96
-# SweepID='' # - 96
-# SweepID='udnbantu' # - 192
+# # regular settings - 96
+# SweepID='s86t4dab' # - 96
+# SweepID='1o1erq16' # - 192
 # SweepID='' # - 336
 # SweepID='' # - 720
 
