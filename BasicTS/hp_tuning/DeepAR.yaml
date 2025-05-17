@@ -1,0 +1,76 @@
+method: bayes  # You can also use 'random' here
+metric:
+  name: val/loss
+  goal: minimize
+parameters:
+  MODEL.NAME: 
+    values: ['DeepAR']
+  DATA_NAME:
+    values: ['ETTh1']
+  OUTPUT_LEN:
+    values: [96]
+  RESCALE:
+    values: [True, False]
+  NORM_EACH_CHANNEL:
+    values: [True, False]
+  # INPUT_LEN:
+  #   values: []
+
+  # MODEL params
+  MODEL.PARAM.cov_feat_size:
+    values: [0, 1, 2, 3, 4]
+  MODEL.PARAM.embedding_size:
+    values: [8, 16,  32, 64, 128]
+  MODEL.PARAM.hidden_size:
+    values: [8, 16, 32, 64, 128, 256]
+  MODEL.PARAM.num_layers:
+    values: [2, 3, 4, 8]
+  MODEL.PARAM.id_feat_size:
+    values: [8, 16, 32, 64, 128]
+  MODEL.PARAM.use_ts_id:
+    values: [False, True]
+  MODEL.PARAM.num_nodes:
+    values: [7]
+  MODEL.PARAM.distribution_type:
+    values: ['gaussian', 'laplace', 'student_t', 'flow'] # flow 
+    # values: ['m_gaussian', 'm_lr_gaussian']
+
+  # Basic Params
+  NUM_EPOCHS:
+    values: [100]
+  USE_WANDB:
+    values: [True]
+
+  # SCALER 
+  SCALER.TYPE:
+    values: [ZScoreScaler, MinMaxScaler, None]
+
+  # OPTIMIZER
+  TRAIN.OPTIM.TYPE:
+    values: [Adam]
+  TRAIN.OPTIM.PARAM.lr:
+    min: 2.5e-4
+    max: 2.5e-2
+    distribution: uniform  
+  TRAIN.OPTIM.PARAM.weight_decay:
+    min: 1.0e-5
+    max: 1.0e-3
+    distribution: uniform 
+  
+  # SCHEDULER
+  TRAIN.LR_SCHEDULER.TYPE:
+    values: [MultiStepLR] 
+  TRAIN.LR_SCHEDULER.PARAM.gamma:
+    min: 0.3
+    max: 0.7
+    distribution: uniform 
+  TRAIN.DATA.BATCH_SIZE:
+    values: [16, 32, 64, 128]
+  TRAIN.RESUME_TRAINING:
+    values: [False]  
+  # TRAIN.EARLY_STOPPING_PATIENCE: 
+  #   values: 5   
+early_terminate:
+  type: hyperband
+  min_iter: 2
+  eta: 3
