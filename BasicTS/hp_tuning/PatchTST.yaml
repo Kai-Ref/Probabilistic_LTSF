@@ -8,7 +8,7 @@ parameters:
   DATA_NAME:
     values: ['ETTh1']
   OUTPUT_LEN:
-    values: [192]
+    values: [96]
   RESCALE:
     values: [True, False]
   NORM_EACH_CHANNEL:
