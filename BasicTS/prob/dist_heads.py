@@ -181,11 +181,14 @@ class LowRankMultivariateGaussianHead(BaseDistribution):
         self.S_layer = nn.Linear(input_dim, output_dim) #self.rank)
    
     def forward(self, x):
-        # The shape of x is probably [batch_size, nvars, features]
-        batch_size, nvars, features = x.shape
+        if len(x.shape) <3:
+            batch_size, features = x.shape
+            nvars = 1
+        else:
+            # The shape of x is probably [batch_size, nvars, features]
+            batch_size, nvars, features = x.shape
         # Reshape x for linear layers: [batch_size*nvars, features]
         x_flat = x.reshape(-1, features)
-        
         # Predict mean
         mean = self.mean_layer(x_flat)  # [batch_size*nvars, output_dim]
         
@@ -201,7 +204,6 @@ class LowRankMultivariateGaussianHead(BaseDistribution):
         # Add dimension for concatenation
         mean = mean.unsqueeze(-1)  # [batch_size, nvars, output_dim, 1]
         S = S.unsqueeze(-1)  # [batch_size, nvars, output_dim, 1]
-
         # Repeat S to match output_dim dimension of V
         # S = S.repeat(1, 1, V.shape[2], 1)  # [batch_size, nvars, output_dim, rank]
 

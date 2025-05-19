@@ -76,7 +76,6 @@ class PatchTST_backbone(nn.Module):
         # model
         z = self.backbone(z)                                                                # z: [bs x nvars x d_model x patch_num]
         z = self.head(z)                                                                    # z: [bs x nvars x target_window] 
-    
         # denorm
         if self.revin: 
             if self.head_type == 'probabilistic':
@@ -125,7 +124,10 @@ class Prob_Head(nn.Module):
                 z = self.prob_heads[i](z)                    # z: [bs x target_window]
                 z = self.dropouts[i](z)
                 x_out.append(z)
-            x = torch.stack(x_out, dim=1)                 # x: [bs x nvars x target_window]
+            if self.distribution_type == "m_lr_gaussian":
+                x = torch.cat(x_out, dim=1)
+            else: 
+                x = torch.stack(x_out, dim=1)                 # x: [bs x nvars x target_window]
         else:
             x = self.flatten(x)                             # x: [bs x nvars x d_model * patch_num], e.g. torch.Size([64, 7, 672])
             x = self.prob_head(x)                         # x: [bs x nvars x target_window x param/quantiles], e.g.[64, 7, 336, 2]

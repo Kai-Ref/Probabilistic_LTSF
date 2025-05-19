@@ -37,7 +37,7 @@ MODEL_PARAM = {
     "head_dropout": 0.0,
     "patch_len": 32,
     "stride": 64,
-    "individual": 0,                            # individual head; True 1 False 0
+    "individual": 1,                            # individual head; True 1 False 0
     "padding_patch": "end",                     # None: None; end: padding on the end
     "revin": 1,                                 # RevIN; True 1 False 0
     "affine": 1,                                # RevIN-affine; True 1 False 0
@@ -47,7 +47,7 @@ MODEL_PARAM = {
     "head_type": "probabilistic",
     "distribution_type": "m_lr_gaussian",
     "prob_args":{#"quantiles": [],#[0.1, 0.25, 0.5, 0.75, 0.9],
-                "rank":96,
+                "rank":13,
                 "base_distribution": "laplace",
                 "base_prob_args": {"rank":7, "quantiles": [],},
                 "n_flows": 2,

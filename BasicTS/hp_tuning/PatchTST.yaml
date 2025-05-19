@@ -56,6 +56,8 @@ parameters:
   MODEL.PARAM.distribution_type:
     # values: ['gaussian', 'laplace', 'student_t', 'flow'] # flow 
     values: ['m_lr_gaussian']
+  MODEL.PARAM.prob_args.rank:
+    values: [7, 72, 180, 360, 480]
 
   # Basic Params
   NUM_EPOCHS:
@@ -91,7 +93,7 @@ parameters:
   TRAIN.RESUME_TRAINING:
     values: [False]  
   TRAIN.EARLY_STOPPING_PATIENCE: 
-    values: 5   
+    values: [5]   
 early_terminate:
   type: hyperband
   min_iter: 2
