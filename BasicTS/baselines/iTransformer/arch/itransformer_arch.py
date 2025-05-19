@@ -59,8 +59,8 @@ class iTransformer(nn.Module):
         )
         if self.head_type == 'probabilistic':
             self.distribution_type = model_args['distribution_type']
-            self.quantiles = model_args['quantiles']
-            self.projector = ProbabilisticHead(self.d_model, self.pred_len, self.distribution_type, self.quantiles)
+            self.prob_args = model_args['prob_args']
+            self.projector = ProbabilisticHead(self.d_model, self.pred_len, self.distribution_type, prob_args=self.prob_args)
         else:
             self.projector = nn.Linear(self.d_model, self.pred_len, bias=True)
 
@@ -93,19 +93,25 @@ class iTransformer(nn.Module):
         if self.head_type == 'probabilistic':
             dec_out = self.projector(enc_out).permute(0, 2, 1, 3)[:, :, :N, :] # bs x seq_len x num_series x num_params
             if self.use_norm:
-                if self.distribution_type in ["gaussian", "laplace"]:
-                    # For Gaussian distribution with mean and std parameters
-                    # Only denormalize the mean parameter (typically at index 0)
+                if self.distribution_type in ["gaussian", "laplace", "student_t", "m_lr_gaussian"]:
                     pred_means = dec_out[:, :, :, 0]
                     pred_means = pred_means * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.pred_len, 1))
                     pred_means = pred_means + (means[:, 0, :].unsqueeze(1).repeat(1, self.pred_len, 1))
                     dec_out[:, :, :, 0] = pred_means
-                    
-                    # For standard deviation parameter, you need to scale it by the original stdev
-                    # but don't add the mean (assuming second parameter is std)
-                    pred_stds = dec_out[:, :, :, 1]
-                    pred_stds = pred_stds * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.pred_len, 1))
-                    dec_out[:, :, :, 1] = pred_stds
+                    if self.distribution_type in ["m_lr_gaussian"]:
+                        rank = self.prob_args['rank']
+                        V = dec_out[..., 1:1+rank]
+                        S = dec_out[..., 1+rank:].squeeze()
+
+                        std = stdev.view(-1, 1, stdev.shape[-1], 1)  # [B, 1, D, 1]
+                        V = V * std
+                        S = S * stdev * stdev
+                        dec_out[..., 1:] = torch.cat([V, S.unsqueeze(-1)], dim=-1)
+                    else:
+                        # For standard deviation parameter, scale it by the original stdev
+                        pred_stds = dec_out[:, :, :, 1]
+                        pred_stds = pred_stds * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.pred_len, 1))
+                        dec_out[:, :, :, 1] = pred_stds
                 else: # for example quantile forecasts
                     # filter by dec_out[:, :self.pred_len, :, :] -> because i_quantile has +1 shape for the quantile levels
                     dec_out[:, :self.pred_len, :, :] = dec_out[:, :self.pred_len, :, :] * (stdev[:, 0, :].unsqueeze(1).unsqueeze(-1).repeat(1, self.pred_len, 1, dec_out.shape[-1]))

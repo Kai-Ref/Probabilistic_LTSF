@@ -54,7 +54,14 @@ MODEL_PARAM = {
     "day_of_year_size": 366,
     "head_type": "probabilistic",
     "distribution_type": "m_lr_gaussian", 
-    "quantiles": [],#[0.1, 0.5, 0.9],
+    "prob_args":{#"quantiles": [],#[0.1, 0.25, 0.5, 0.75, 0.9],
+                "rank":13,
+                "base_distribution": "laplace",
+                "base_prob_args": {"rank":7, "quantiles": [],},
+                "n_flows": 2,
+                "flow_hidden_dim": 16,
+                "flow_type": "sigmoidal", # sigmoidal, rectified, affine
+                }, 
     }
 NUM_EPOCHS = 100
 

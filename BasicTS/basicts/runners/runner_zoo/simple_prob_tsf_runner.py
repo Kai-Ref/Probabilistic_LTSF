@@ -37,6 +37,7 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
         # self.quantiles = cfg['MODEL']['PARAM'].get('quantiles', None)
         self.distribution_type = cfg['MODEL']['PARAM'].get('distribution_type', None)
         self.quantiles = cfg['MODEL']['PARAM'].get('quantiles', None)
+        self.prob_args = cfg['MODEL']['PARAM'].get('prob_args', None)
         self.output_seq_len = cfg["DATASET"]["PARAM"]["output_len"]
         self.model_name = cfg["MODEL"]["NAME"]
         print(self.model_name)
@@ -279,10 +280,12 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
         if isinstance(metric_func, functools.partial) or (type(metric_func) is Evaluator):
             metric_item = metric_func(**args)
         elif callable(metric_func):
-            if ('quantile_loss' in str(metric_func)) and ('quantiles' not in list(args.keys())):
-                args['quantiles'] = self.quantiles
+            if ('quantile_loss' in str(metric_func)) and ('quantiles' not in list(args['prob_args'].keys())):
+                args['prob_args']['quantiles'] = self.quantiles
             if ('nll_loss' in str(metric_func)) or ('crps' in str(metric_func)):
                 args['distribution_type'] = self.distribution_type
+                args['prob_args'] = self.prob_args
+
             metric_item = metric_func(**args)
         else:
             raise TypeError(f'Unknown metric type: {type(metric_func)}')

@@ -26,11 +26,11 @@ class ProbabilisticHead(nn.Module):
         "gcopula": GaussianCopulaHead,  # Copula-based multivariate head (see args for copula/marginal config)
     }
 
-    def __init__(self, input_dim, output_dim, distribution_type="gaussian", quantiles=[], rank=48):
+    def __init__(self, input_dim, output_dim, distribution_type="gaussian", prob_args={}):
         super().__init__()
         if distribution_type not in self.DISTRIBUTIONS:
             raise ValueError(f"Unsupported distribution type: {distribution_type}")
-        self.head = self.DISTRIBUTIONS[distribution_type](input_dim, output_dim, {'quantiles':quantiles, 'rank':rank})
+        self.head = self.DISTRIBUTIONS[distribution_type](input_dim, output_dim, prob_args=prob_args)
 
     def forward(self, x):
         return self.head(x)

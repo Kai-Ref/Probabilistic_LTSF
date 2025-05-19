@@ -6,7 +6,7 @@ import math
 
 class BaseDistribution(nn.Module):
     """Abstract base class for different probabilistic heads."""
-    def __init__(self, input_dim, output_dim, args):
+    def __init__(self, input_dim, output_dim, prob_args={}):
         super().__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
@@ -22,7 +22,7 @@ class BaseDistribution(nn.Module):
         return self.__get_dist__(head_output).rsample((num_samples,))
 
 class MultivariateGaussianHead(BaseDistribution):
-    def __init__(self, input_dim, output_dim, args):
+    def __init__(self, input_dim, output_dim, prob_args={}):
         """
         Predict a low-rank factorization of the covariance matrix
         
@@ -31,8 +31,10 @@ class MultivariateGaussianHead(BaseDistribution):
         output_dim: Dimensionality of the output distribution
         rank: Rank of the low-rank factorization (default is 5)
         """
-        super().__init__(input_dim, output_dim, args) 
-        self.rank = 96
+        super().__init__(input_dim, output_dim, prob_args=prob_args) 
+        assert 'rank' in prob_args.keys()
+        self.rank = prob_args['rank']
+        
         # Mean prediction layer
         self.mean_layer = nn.Linear(input_dim, output_dim)
         
@@ -41,51 +43,121 @@ class MultivariateGaussianHead(BaseDistribution):
         # S will be rank-sized vector of scaling factors
         self.V_layer = nn.Linear(input_dim, output_dim * self.rank)
         self.S_layer = nn.Linear(input_dim, self.rank)
-    
-    def forward(self, x):
-        # Predict mean
-        mean = self.mean_layer(x)
-        # Predict low-rank factorization components
-        # Reshape V to be (batch_size, output_dim * var_dim, rank)
-        V = self.V_layer(x).view(x.shape[0], self.output_dim, self.rank)
 
-        # Predict scaling factors with softplus to ensure positivity
-        # Shape will be (batch_size, rank)
-        S = torch.nn.functional.softplus(self.S_layer(x))
-        S = S.unsqueeze(1).repeat(1, V.shape[1], 1)
+    def forward(self, x):
+        # The shape of x is [batch_size, nvars, features]
+        batch_size, nvars, features = x.shape
+        # Reshape x for linear layers: [batch_size*nvars, features]
+        x_flat = x.reshape(-1, features)
         
-        # Combine mean, V, and S into a single tensor
-        # This allows for potential dropout or other operations
-        return torch.cat([
-            mean.unsqueeze(-1),  # First: mean tensor
-            V,     # Second: V matrix
-            S  # Last: scaling factors
-        ], dim=-1)
+        # Predict mean
+        mean = self.mean_layer(x_flat)  # [batch_size*nvars, output_dim]
+        
+        # Predict low-rank factorization components
+        V = self.V_layer(x_flat)  # [batch_size*nvars, output_dim*rank]
+        S = torch.nn.functional.softplus(self.S_layer(x_flat))  # [batch_size*nvars, rank]
+        
+        # Reshape back to include nvars dimension
+        mean = mean.view(batch_size, nvars, self.output_dim)  # [batch_size, nvars, output_dim]
+        V = V.view(batch_size, nvars, self.output_dim, self.rank)  # [batch_size, nvars, output_dim, rank]
+        S = S.view(batch_size, nvars, self.rank)  # [batch_size, nvars, rank]
+        
+        # Add dimension for concatenation
+        mean = mean.unsqueeze(-1)  # [batch_size, nvars, output_dim, 1]
+        S = S.unsqueeze(2)  # [batch_size, nvars, 1, rank]
+        
+        # Repeat S to match output_dim dimension of V
+        S = S.repeat(1, 1, self.output_dim, 1)  # [batch_size, nvars, output_dim, rank]
+        
+        # Concatenate along the last dimension
+        result = torch.cat([
+            mean,  # [batch_size, nvars, output_dim, 1]
+            V,     # [batch_size, nvars, output_dim, rank]
+            S      # [batch_size, nvars, output_dim, rank]
+        ], dim=-1)  # [batch_size, nvars, output_dim, 1 + 2*rank]
+        
+        return result
 
     def __get_dist__(self, prediction):
         distributions = []
-        rank = self.rank
-        mean, V_full, S_full = prediction[..., 0], prediction[..., 1:-rank], prediction[..., -rank:]
-        S_full = S_full[:, 0, :, :] #torch.abs(S[:, 0, :, :])
+        prediction = prediction.permute(0,2,1,3)
+        # Extract components with correct dimensions
+        mean = prediction[..., 0]  # [batch_size, nvars, output_dim]
+        V_full = prediction[..., 1:1+self.rank]  # [batch_size, nvars, output_dim, rank]
+        S_full = prediction[..., 1+self.rank:]  # [batch_size, nvars, output_dim, rank]
+        
+        # Ensure positive values for variance scaling factors
         S_full = torch.clamp(S_full, min=1e-6)
-        for i in range(prediction.shape[-2]):
-            S = S_full[:, i, :]
-            V = V_full[:, :, i, :]
-            Q = ensure_positive_definite_matrix(V, S, method='robust_cov')
-            distributions.append(dist.MultivariateNormal(mean[:, :, i], Q))
+        
+        # Process each variable separately
+        for i in range(prediction.shape[1]):  # Loop over nvars
+            var_mean = mean[:, i, :]  # [batch_size, output_dim]
+            var_V = V_full[:, i, :, :]  # [batch_size, output_dim, rank]
+            var_S = S_full[:, i, 0, :]  # [batch_size, rank] - using first output_dim slice
+            
+            # Create covariance matrix using robust method
+            Q = ensure_positive_definite_matrix(var_V, var_S, method='robust_cov')
+            
+            # Create distribution
+            distributions.append(dist.MultivariateNormal(var_mean, Q))
+            
         return distributions
 
     def sample(self, head_output, num_samples=1):
-        """Since slightly different behavior overwrite the sampling function."""
-        batch_size, output_dim, num_series = head_output[..., 0].shape
+        """Sample from the multivariate normal distributions."""
+        batch_size, num_series, output_dim, _ = head_output.shape
         samples = torch.zeros(num_samples, batch_size, output_dim, num_series, device=head_output.device)
         distributions = self.__get_dist__(head_output)
-        for i, dist in enumerate(distributions):
-            samples[:, :, :, i] = dist.rsample((num_samples,))
+        
+        for i, distribution in enumerate(distributions):
+            samples[:, :, :, i] = distribution.rsample((num_samples,))
+            
         return samples
 
+    # def forward(self, x):
+    #     # Predict mean
+    #     mean = self.mean_layer(x)
+    #     # Predict low-rank factorization components
+    #     # Reshape V to be (batch_size, output_dim * var_dim, rank)
+    #     V = self.V_layer(x).view(x.shape[0], self.output_dim, self.rank)
+
+    #     # Predict scaling factors with softplus to ensure positivity
+    #     # Shape will be (batch_size, rank)
+    #     S = torch.nn.functional.softplus(self.S_layer(x))
+    #     S = S.unsqueeze(1).repeat(1, V.shape[1], 1)
+        
+    #     # Combine mean, V, and S into a single tensor
+    #     # This allows for potential dropout or other operations
+    #     return torch.cat([
+    #         mean.unsqueeze(-1),  # First: mean tensor
+    #         V,     # Second: V matrix
+    #         S  # Last: scaling factors
+    #     ], dim=-1)
+
+    # def __get_dist__(self, prediction):
+    #     distributions = []
+    #     rank = self.rank
+    #     mean, V_full, S_full = prediction[..., 0], prediction[..., 1:-rank], prediction[..., -rank:]
+    #     S_full = S_full[:, 0, :, :] #torch.abs(S[:, 0, :, :])
+    #     S_full = torch.clamp(S_full, min=1e-6)
+    #     for i in range(prediction.shape[-2]):
+    #         S = S_full[:, i, :]
+    #         V = V_full[:, :, i, :]
+    #         Q = ensure_positive_definite_matrix(V, S, method='robust_cov')
+    #         distributions.append(dist.MultivariateNormal(mean[:, :, i], Q))
+    #     return distributions
+
+    # def sample(self, head_output, num_samples=1):
+    #     """Since slightly different behavior overwrite the sampling function."""
+    #     batch_size, output_dim, num_series = head_output[..., 0].shape
+    #     samples = torch.zeros(num_samples, batch_size, output_dim, num_series, device=head_output.device)
+    #     distributions = self.__get_dist__(head_output)
+    #     for i, dist in enumerate(distributions):
+    #         samples[:, :, :, i] = dist.rsample((num_samples,))
+    #     return samples
+
 class LowRankMultivariateGaussianHead(BaseDistribution):
-    def __init__(self, input_dim, output_dim, args):
+    def __init__(self, input_dim, output_dim, prob_args={}):
         """
         Predict a low-rank factorization of the covariance matrix
        
@@ -94,12 +166,10 @@ class LowRankMultivariateGaussianHead(BaseDistribution):
         output_dim: Dimensionality of the output distribution
         rank: Rank of the low-rank factorization (default is 5)
         """
-        super().__init__(input_dim, output_dim, args)
-        if 'rank' in args:
-            self.rank = args['rank']
-        else:
-            self.rank = 30
-        print(f"My Rank is {self.rank}")
+        super().__init__(input_dim, output_dim, prob_args=prob_args)
+        assert 'rank' in prob_args.keys()
+        self.rank = prob_args['rank']
+
         self.output_dim = output_dim
         # Mean prediction layer
         self.mean_layer = nn.Linear(input_dim, output_dim)
@@ -121,7 +191,7 @@ class LowRankMultivariateGaussianHead(BaseDistribution):
         
         # Predict low-rank factorization components
         V = self.V_layer(x_flat)  # [batch_size*nvars, output_dim*rank]
-        S = torch.nn.functional.softplus(self.S_layer(x_flat))  # [batch_size*nvars, rank]
+        S = torch.nn.functional.softplus(self.S_layer(x_flat))  # [batch_size*nvars, output_dim]
         
         # Reshape back to include nvars dimension
         mean = mean.view(batch_size, nvars, -1)  # [batch_size, nvars, output_dim]
@@ -130,18 +200,18 @@ class LowRankMultivariateGaussianHead(BaseDistribution):
         
         # Add dimension for concatenation
         mean = mean.unsqueeze(-1)  # [batch_size, nvars, output_dim, 1]
-        S = S.unsqueeze(2)  # [batch_size, nvars, 1, rank]
+        S = S.unsqueeze(-1)  # [batch_size, nvars, output_dim, 1]
 
         # Repeat S to match output_dim dimension of V
-        S = S.repeat(1, 1, V.shape[2], 1)  # [batch_size, nvars, output_dim, rank]
+        # S = S.repeat(1, 1, V.shape[2], 1)  # [batch_size, nvars, output_dim, rank]
 
         # Now all tensors have shape [batch_size, nvars, output_dim, *]
         # Concatenate along the last dimension
         result = torch.cat([
             mean,  # [batch_size, nvars, output_dim, 1]
             V,     # [batch_size, nvars, output_dim, rank]
-            S      # [batch_size, nvars, output_dim, rank]
-        ], dim=-1)  # [batch_size, nvars, output_dim, 1 + rank + rank]
+            S      # [batch_size, nvars, output_dim, 1]
+        ], dim=-1)  # [batch_size, nvars, output_dim, 1 + rank + 1]
         return result
 
     def __get_dist__(self, prediction):
@@ -150,7 +220,7 @@ class LowRankMultivariateGaussianHead(BaseDistribution):
         prediction = prediction.permute(0,2,1,3)
         mean = prediction[..., 0]  # [batch_size, nvars, output_dim]
         V_full = prediction[..., 1:1+rank]  # [batch_size, nvars, output_dim, rank]
-        S_full = prediction[..., 1+rank:]  # [batch_size, nvars, output_dim, rank]
+        S_full = prediction[..., 1+rank:]  # [batch_size, nvars, output_dim, 1]
         
         # Ensure positive values for variance scaling factors
         S_full = torch.clamp(S_full, min=1e-6)
@@ -158,7 +228,8 @@ class LowRankMultivariateGaussianHead(BaseDistribution):
             # Extract data for this variable
             var_mean = mean[:, i, :]  # [batch_size, output_dim]
             var_V = V_full[:, i, :, :]  # [batch_size, output_dim, rank]
-            var_S = S_full[:, i, 0, :]  # [batch_size, rank] - using first output_dim slice for S
+            var_S = S_full[:, i, :, :].squeeze()  # [batch_size, output_dim] - using first output_dim slice for S
+            # var_S = torch.diag_embed(var_S)
             # Create distribution
             distributions.append(dist.LowRankMultivariateNormal(
                 var_mean, 
@@ -179,8 +250,8 @@ class LowRankMultivariateGaussianHead(BaseDistribution):
 
 class GaussianHead(BaseDistribution):
     """Gaussian distribution output: mean and variance."""
-    def __init__(self, input_dim, output_dim, args):
-        super().__init__(input_dim, output_dim, args)
+    def __init__(self, input_dim, output_dim, prob_args={}):
+        super().__init__(input_dim, output_dim, prob_args=prob_args)
         self.mean_layer = nn.Linear(input_dim, output_dim)
         self.std_layer = nn.Linear(input_dim, output_dim)
         self.activation = nn.Softplus()
@@ -207,10 +278,10 @@ class LaplaceHead(GaussianHead):
 
 class QuantileHead(BaseDistribution):
     """Quantile regression head."""
-    def __init__(self, input_dim, output_dim, args):
-        super().__init__(input_dim, output_dim, args)
-        self.quantiles = args['quantiles']
-        assert args['quantiles'] is not None, "quantiles must be specified for quantile regression"
+    def __init__(self, input_dim, output_dim, prob_args={}):
+        super().__init__(input_dim, output_dim, prob_args=prob_args)
+        assert prob_args['quantiles'] is not None, "quantiles must be specified for quantile regression"
+        self.quantiles = prob_args['quantiles']
         self.layers = nn.ModuleList([nn.Linear(input_dim, output_dim) for _ in range(len(self.quantiles))])
 
     def forward(self, x):
@@ -223,11 +294,11 @@ class QuantileHead(BaseDistribution):
 
 class ImplicitQuantileHead(BaseDistribution):
     """Implicit Quantile Network (IQN) for quantile regression."""
-    def __init__(self, input_dim, output_dim, args):
-        super().__init__(input_dim, output_dim, args)
-        self.num_layers = 1
-        self.quantiles = args['quantiles']
-        self.quantile_embed_dim = 64
+    def __init__(self, input_dim, output_dim, prob_args={}):
+        super().__init__(input_dim, output_dim, prob_args=prob_args)
+        self.num_layers = prob_args['num_layers'] #1
+        self.quantiles = prob_args['quantiles']
+        self.quantile_embed_dim = prob_args['quantile_embed_dim'] #64
         self.cos_embedding_dim = self.quantile_embed_dim
         self.quantile_embedding = nn.Linear(self.cos_embedding_dim, self.quantile_embed_dim)
         self.qr_head = nn.Linear(input_dim + self.quantile_embed_dim, output_dim)
@@ -289,8 +360,8 @@ class ImplicitQuantileHead(BaseDistribution):
 
 class StudentTHead(GaussianHead):
     """Student's t-distribution for heavy-tailed data."""
-    def __init__(self, input_dim, output_dim, args):
-        super().__init__(input_dim, output_dim, args)
+    def __init__(self, input_dim, output_dim, prob_args={}):
+        super().__init__(input_dim, output_dim, prob_args=prob_args)
         self.df_layer = nn.Linear(input_dim, output_dim)
         self.df_activation = nn.Softplus()  # Ensure degrees of freedom > 0
 
@@ -316,8 +387,8 @@ class LogNormalHead(GaussianHead):
 
 class BetaHead(BaseDistribution):
     """Beta distribution for forecasting probabilities (0,1)."""
-    def __init__(self, input_dim, output_dim, args):
-        super().__init__(input_dim, output_dim, args)
+    def __init__(self, input_dim, output_dim, prob_args={}):
+        super().__init__(input_dim, output_dim, prob_args=prob_args)
         self.alpha_layer = nn.Linear(input_dim, output_dim)
         self.beta_layer = nn.Linear(input_dim, output_dim)
         self.activation = nn.Softplus()  # Ensure alpha, beta > 0
@@ -335,8 +406,8 @@ class BetaHead(BaseDistribution):
 
 class GammaHead(BaseDistribution):
     """Gamma distribution for skewed positive-valued data."""
-    def __init__(self, input_dim, output_dim, args):
-        super().__init__(input_dim, output_dim, args)
+    def __init__(self, input_dim, output_dim, prob_args={}):
+        super().__init__(input_dim, output_dim, prob_args=prob_args)
         self.shape_layer = nn.Linear(input_dim, output_dim)
         self.rate_layer = nn.Linear(input_dim, output_dim)
         self.activation = nn.Softplus()
@@ -366,8 +437,8 @@ class WeibullHead(GammaHead):
 
 class PoissonHead(BaseDistribution):
     """Poisson distribution for count data forecasting."""
-    def __init__(self, input_dim, output_dim, args):
-        super().__init__(input_dim, output_dim, args)
+    def __init__(self, input_dim, output_dim, prob_args={}):
+        super().__init__(input_dim, output_dim, prob_args=prob_args)
         self.rate_layer = nn.Linear(input_dim, output_dim)
         self.activation = nn.Softplus()  # Ensure rate > 0
 
@@ -382,8 +453,8 @@ class PoissonHead(BaseDistribution):
 
 class NegativeBinomialHead(PoissonHead):
     """Negative Binomial distribution for overdispersed count data."""
-    def __init__(self, input_dim, output_dim, args):
-        super().__init__(input_dim, output_dim, args)
+    def __init__(self, input_dim, output_dim, prob_args={}):
+        super().__init__(input_dim, output_dim, prob_args=prob_args)
         self.dispersion_layer = nn.Linear(input_dim, output_dim)
 
     def forward(self, x):
@@ -400,8 +471,8 @@ class NegativeBinomialHead(PoissonHead):
 
 class DirichletHead(BaseDistribution):
     """Dirichlet distribution for multivariate probabilities."""
-    def __init__(self, input_dim, output_dim, args):
-        super().__init__(input_dim, output_dim, args)
+    def __init__(self, input_dim, output_dim, prob_args={}):
+        super().__init__(input_dim, output_dim, prob_args=prob_args)
         self.concentration_layer = nn.Linear(input_dim, output_dim)
         self.activation = nn.Softplus()
 
@@ -440,8 +511,8 @@ class GaussianCopulaHead(BaseDistribution):
     Args (in args dict):
         marginal_type, marginal_args
     """
-    def __init__(self, input_dim, output_dim, args):
-        super().__init__(input_dim, output_dim, args)
+    def __init__(self, input_dim, output_dim, prob_args={}):
+        super().__init__(input_dim, output_dim, prob_args=prob_args)
         self.output_dim = output_dim
         self.input_dim = input_dim
         self.marginal_type = args.get('marginal_type', 'gaussian')
@@ -548,8 +619,8 @@ class StudentTCopulaHead(BaseDistribution):
     Args (in args dict):
         marginal_type, marginal_args, df
     """
-    def __init__(self, input_dim, output_dim, args):
-        super().__init__(input_dim, output_dim, args)
+    def __init__(self, input_dim, output_dim, prob_args={}):
+        super().__init__(input_dim, output_dim, prob_args=prob_args)
         self.output_dim = output_dim
         self.input_dim = input_dim
         self.marginal_type = args.get('marginal_type', 'gaussian')
@@ -648,8 +719,8 @@ class CopulaHead(BaseDistribution):
     Args (in args dict):
         marginal_type, marginal_args, attention_heads, attention_layers, attention_dim, mlp_layers, mlp_dim, resolution, dropout, fixed_permutation
     """
-    def __init__(self, input_dim, output_dim, args):
-        super().__init__(input_dim, output_dim, args)
+    def __init__(self, input_dim, output_dim, prob_args={}):
+        super().__init__(input_dim, output_dim, prob_args=prob_args)
         self.output_dim = output_dim # prediction length
         self.input_dim = input_dim
         self.attention_heads = args.get('attention_heads', 2)

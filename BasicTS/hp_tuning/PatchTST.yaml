@@ -8,7 +8,7 @@ parameters:
   DATA_NAME:
     values: ['ETTh1']
   OUTPUT_LEN:
-    values: [96]
+    values: [720]
   RESCALE:
     values: [True, False]
   NORM_EACH_CHANNEL:
@@ -41,10 +41,10 @@ parameters:
     values: [2, 4, 8, 16, 32, 64, 128]
   MODEL.PARAM.individual:
     values: [0, 1]
-  # MODEL.PARAM.revin:
-  #   values: [0, 1]
-  # MODEL.PARAM.affin:
-  #   values: [0, 1]
+  MODEL.PARAM.revin:
+    values: [0, 1]
+  MODEL.PARAM.affin:
+    values: [0, 1]
   MODEL.PARAM.subtract_last:
     values: [0, 1]
   MODEL.PARAM.decomposition:
@@ -54,8 +54,8 @@ parameters:
   MODEL.PARAM.head_type:
     values: ['probabilistic']
   MODEL.PARAM.distribution_type:
-    values: ['gaussian', 'laplace', 'student_t', 'flow'] # flow 
-    # values: ['m_gaussian', 'm_lr_gaussian']
+    # values: ['gaussian', 'laplace', 'student_t', 'flow'] # flow 
+    values: ['m_lr_gaussian']
 
   # Basic Params
   NUM_EPOCHS:

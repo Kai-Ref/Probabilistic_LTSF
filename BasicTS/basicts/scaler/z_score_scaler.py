@@ -103,12 +103,22 @@ class ZScoreScaler(BaseScaler):
         if head == 'gaussian':#TODO also handle quantile normalization, i think this only normalizes the first channel...
             input_data[..., 0] = input_data[..., 0] * std + mean
             input_data[..., 1] = input_data[..., 1] * std
-        elif head == 'm_gaussian':
+        elif head in ['quantile', 'i_quantile']:
+            input_data[..., 0] = input_data[..., 0] * std + mean # check this
+            raise KeyError
+        elif head in ['m_gaussian', 'm_lr_gaussian']:
             input_data[..., 0] = input_data[..., 0] * std + mean
-            print(std.shape)
-            print(input_data.shape)
-            # Σ_normalized[i,j] = Σ[i,j] / (σ[i] * σ[j])
-            input_data[..., 1:] = input_data[..., 1:] * std
+
+            # determine the rank
+            rank = input_data.shape[-1] - 1 - 1
+
+            # rescale the low rank matrix
+            V_full = input_data[..., 1:1+rank]  # [batch_size, nvars, output_dim, rank]
+            input_data[..., 1:1+rank] = V_full * std.view(1, 1, 7, 1) 
+            
+            # rescale the diagonal matrix
+            S_full = input_data[..., 1+rank:]  # [batch_size, nvars, output_dim, 1]
+            input_data[..., 1+rank:]  = S_full * std.view(1, 1, 7, 1) * std.view(1, 1, 7, 1) 
         else:
             input_data[..., self.target_channel] = input_data[..., self.target_channel] * std + mean
         return input_data

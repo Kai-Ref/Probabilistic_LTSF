@@ -15,8 +15,8 @@ from .arch import PatchTST
 # Dataset & Metrics configuration
 DATA_NAME = 'ETTh1'  # Dataset name
 regular_settings = get_regular_settings(DATA_NAME)
-INPUT_LEN = regular_settings['INPUT_LEN']  # Length of input sequence
-OUTPUT_LEN = 96 #regular_settings['OUTPUT_LEN']  # Length of output sequence
+INPUT_LEN = 96 # regular_settings['INPUT_LEN']  # Length of input sequence
+OUTPUT_LEN = 720 #regular_settings['OUTPUT_LEN']  # Length of output sequence
 TRAIN_VAL_TEST_RATIO = regular_settings['TRAIN_VAL_TEST_RATIO']  # Train/Validation/Test split ratios
 NORM_EACH_CHANNEL = True #regular_settings['NORM_EACH_CHANNEL'] # Whether to normalize each channel of the data
 RESCALE = True #regular_settings['RESCALE'] # Whether to rescale the data
@@ -30,24 +30,30 @@ MODEL_PARAM = {
     "pred_len": OUTPUT_LEN,         # prediction sequence length
     "e_layers": 2,                              # num of encoder layers
     "n_heads": 2,
-    "d_model": 8,
-    "d_ff": 128,
+    "d_model": 32,
+    "d_ff": 32,
     "dropout": 0.3,
     "fc_dropout": 0.3,
     "head_dropout": 0.0,
-    "patch_len": 128,
+    "patch_len": 32,
     "stride": 64,
     "individual": 0,                            # individual head; True 1 False 0
     "padding_patch": "end",                     # None: None; end: padding on the end
-    "revin": 0,                                 # RevIN; True 1 False 0
-    "affine": 0,                                # RevIN-affine; True 1 False 0
-    "subtract_last": 0,                         # 0: subtract mean; 1: subtract last
-    "decomposition": 0,                         # decomposition; True 1 False 0
+    "revin": 1,                                 # RevIN; True 1 False 0
+    "affine": 1,                                # RevIN-affine; True 1 False 0
+    "subtract_last": 1,                         # 0: subtract mean; 1: subtract last
+    "decomposition": 1,                         # decomposition; True 1 False 0
     "kernel_size": 25,                          # decomposition-kernel
     "head_type": "probabilistic",
-    "distribution_type": "m_lr_gaussian", 
-    "quantiles": [],#[0.1, 0.25, 0.5, 0.75, 0.9],
-    "rank": 12,
+    "distribution_type": "m_lr_gaussian",
+    "prob_args":{#"quantiles": [],#[0.1, 0.25, 0.5, 0.75, 0.9],
+                "rank":96,
+                "base_distribution": "laplace",
+                "base_prob_args": {"rank":7, "quantiles": [],},
+                "n_flows": 2,
+                "flow_hidden_dim": 16,
+                "flow_type": "sigmoidal", # sigmoidal, rectified, affine
+                }, 
 }
 NUM_EPOCHS = 100
 
@@ -77,7 +83,7 @@ CFG.DATASET.PARAM = EasyDict({
 ############################## Scaler Configuration ##############################
 CFG.SCALER = EasyDict()
 #Scaler settings
-CFG.SCALER.TYPE = ZScoreScaler # Scaler class, None
+CFG.SCALER.TYPE = ZScoreScaler # Scaler class, None MinMaxScaler ZScoreScaler
 CFG.SCALER.PARAM = EasyDict({
    'dataset_name': DATA_NAME,
    'train_ratio': TRAIN_VAL_TEST_RATIO[0],

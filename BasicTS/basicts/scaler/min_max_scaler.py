@@ -96,15 +96,27 @@ class MinMaxScaler(BaseScaler):
         _min = self.min.to(input_data.device)
         _max = self.max.to(input_data.device)
         input_data = input_data.clone()
-        if head == 'gaussian':#TODO also handle quantile normalization, i think this only normalizes the first channel...
+        if head in ['gaussian', 'laplace', 'student_t']:
             input_data[..., 0] = input_data[..., 0] * (_max - _min) + _min
-            # input_data[..., 1] = input_data[..., 1] * std
-        elif head == 'm_gaussian':
+            input_data[..., 1] = input_data[..., 1] * (_max - _min)
+        elif head in ['quantile', 'i_quantile']: #TODO also handle quantile normalization
+            input_data[..., 0] = input_data[..., 0] * (_max - _min) + _min # check this
+            raise KeyError
+        elif head in ['m_gaussian', 'm_lr_gaussian']:
             input_data[..., 0] = input_data[..., 0] * (_max - _min) + _min
-            # print(std.shape)
-            # print(input_data.shape)
-            # # Σ_normalized[i,j] = Σ[i,j] / (σ[i] * σ[j])
-            # input_data[..., 1:] = input_data[..., 1:] * std
+            # determine the rank
+            rank = input_data.shape[-1] - 1 - 1
+
+            V_full = input_data[..., 1:1+rank]  # [batch_size, nvars, output_dim, rank]
+            S_full = input_data[..., 1+rank:]  # [batch_size, nvars, output_dim, 1]
+
+            range_ = (_max - _min).to(input_data.device)
+
+            # Rescale low-rank matrix (per variable)
+            input_data[..., 1:1+rank] = V_full * range_.view(1, 1, 7, 1)
+
+            # Rescale diagonal (variance) part: scale^2
+            input_data[..., 1+rank:] = S_full * range_.view(1, 1, 7, 1) * range_.view(1, 1, 7, 1) #range_.view(1, 1, 1, 7)
         else:
             input_data[..., self.target_channel] = input_data[..., self.target_channel] * (_max - _min) + _min
         return input_data

@@ -11,7 +11,7 @@ import functools
 from prob.prob_head import ProbabilisticHead 
 import scoringrules as sr
 
-def crps(prediction: torch.Tensor, target: torch.Tensor, distribution_type:str, null_val: float = np.nan):
+def crps(prediction: torch.Tensor, target: torch.Tensor, distribution_type:str,  prob_args={}, null_val: float = np.nan):
     target = target.clone().squeeze(-1).detach().cpu()
     # Handle missing values
     if np.isnan(null_val):
@@ -63,13 +63,13 @@ def crps(prediction: torch.Tensor, target: torch.Tensor, distribution_type:str, 
         probs = rate / (rate + dispersion)  # Convert to success probability
         score = sr.crps_negbinom(target, dispersion, prob=probs)
     elif distribution_type in ["weibull", "dirichlet"]: #TODO -> resort to empirical crps
-        return empirical_crps(prediction, target, distribution_type, null_val=null_val)
+        return empirical_crps(prediction, target, distribution_type, prob_args=prob_args, null_val=null_val)
     else:
-        return empirical_crps(prediction, target, distribution_type, null_val=null_val)
+        return empirical_crps(prediction, target, distribution_type, prob_args=prob_args, null_val=null_val)
         # raise ValueError(f"Unsupported distribution type: {distribution_type}")
     return np.mean(score)
 
-def empirical_crps(prediction: torch.Tensor, target: torch.Tensor, distribution_type:str, null_val: float = np.nan) -> torch.Tensor:
+def empirical_crps(prediction: torch.Tensor, target: torch.Tensor, distribution_type:str,  prob_args={}, null_val: float = np.nan) -> torch.Tensor:
     '''
     estimator: str:"akr_circperm": CRPS estimaton based on the AKR with cyclic permutation.
                     "akr": CRPS estimaton based on the approximate kernel representation.
@@ -83,7 +83,7 @@ def empirical_crps(prediction: torch.Tensor, target: torch.Tensor, distribution_
     '''
     # return np.mean(y_pred_samples <= x)
     target = target.clone().squeeze(-1).detach().cpu()
-    prob_head = ProbabilisticHead(1, 1, distribution_type)
+    prob_head = ProbabilisticHead(1, 1, distribution_type, prob_args=prob_args)
     samples = prob_head.sample(prediction, num_samples=100) # [samples x bs x seq_len x nvars]
     samples = samples.permute(1, 2, 3, 0).detach().cpu()       # [bs x seq_len x nvars x samples]
     score = sr.crps_ensemble(target, samples, estimator='pwm')
@@ -207,7 +207,7 @@ def quantile_loss_old(prediction: torch.Tensor, target: torch.Tensor, quantiles:
         losses.append(loss.mean())  # Average over all samples
     return torch.mean(torch.stack(losses))  # Average across all quantiles
 
-def nll_loss(prediction: torch.Tensor, target: torch.Tensor, distribution_type: str, null_val: float = np.nan): #prediction: torch.Tensor, target: torch.Tensor, std: torch.Tensor, reduction: str = 'mean') -> torch.Tensor:
+def nll_loss(prediction: torch.Tensor, target: torch.Tensor, distribution_type: str, prob_args={}, null_val: float = np.nan): #prediction: torch.Tensor, target: torch.Tensor, std: torch.Tensor, reduction: str = 'mean') -> torch.Tensor:
     """
     Generalized Negative Log-Likelihood (NLL) Loss for different probabilistic distributions.
 
@@ -234,7 +234,7 @@ def nll_loss(prediction: torch.Tensor, target: torch.Tensor, distribution_type: 
     mask = torch.where(torch.isnan(mask), torch.zeros_like(mask), mask)
 
     # initialize an instance of the ProbabilisticHead class to have access to the __get_dist__ function
-    prob_head = ProbabilisticHead(1, 1, distribution_type)
+    prob_head = ProbabilisticHead(1, 1, distribution_type, prob_args=prob_args)
     distribution = prob_head.__get_dist__(prediction)
     if type(distribution) == list:
         nll = []
