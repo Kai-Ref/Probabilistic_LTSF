@@ -95,7 +95,11 @@ class LowRankMultivariateGaussianHead(BaseDistribution):
         rank: Rank of the low-rank factorization (default is 5)
         """
         super().__init__(input_dim, output_dim, args)
-        self.rank = 30
+        if 'rank' in args:
+            self.rank = args['rank']
+        else:
+            self.rank = 30
+        print(f"My Rank is {self.rank}")
         self.output_dim = output_dim
         # Mean prediction layer
         self.mean_layer = nn.Linear(input_dim, output_dim)

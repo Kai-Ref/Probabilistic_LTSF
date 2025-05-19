@@ -25,7 +25,7 @@ class PatchTST(nn.Module):
                  attn_mask:Optional[Tensor]=None, res_attention:bool=True, 
                  pre_norm:bool=False, store_attn:bool=False, pe:str='zeros',
                  learn_pe:bool=True, pretrain_head:bool=False, head_type = 'flatten',
-                 verbose:bool=False, distribution_type="gaussian", quantiles=None, **kwargs):
+                 verbose:bool=False, distribution_type="gaussian", quantiles=None, rank=48, **kwargs):
     
         super().__init__()
 
@@ -69,7 +69,7 @@ class PatchTST(nn.Module):
                                   attn_mask=attn_mask, res_attention=res_attention, pre_norm=pre_norm, store_attn=store_attn,
                                   pe=pe, learn_pe=learn_pe, fc_dropout=fc_dropout, head_dropout=head_dropout, padding_patch = padding_patch,
                                   pretrain_head=pretrain_head, head_type=head_type, individual=individual, revin=revin, affine=affine,
-                                  subtract_last=subtract_last, verbose=verbose, distribution_type=distribution_type, quantiles=quantiles, **kwargs)
+                                  subtract_last=subtract_last, verbose=verbose, distribution_type=distribution_type, quantiles=quantiles, rank=rank, **kwargs)
             self.model_res = PatchTST_backbone(c_in=c_in, context_window = context_window, target_window=target_window, patch_len=patch_len, stride=stride, 
                                   max_seq_len=max_seq_len, n_layers=n_layers, d_model=d_model,
                                   n_heads=n_heads, d_k=d_k, d_v=d_v, d_ff=d_ff, norm=norm, attn_dropout=attn_dropout,
@@ -77,7 +77,7 @@ class PatchTST(nn.Module):
                                   attn_mask=attn_mask, res_attention=res_attention, pre_norm=pre_norm, store_attn=store_attn,
                                   pe=pe, learn_pe=learn_pe, fc_dropout=fc_dropout, head_dropout=head_dropout, padding_patch = padding_patch,
                                   pretrain_head=pretrain_head, head_type=head_type, individual=individual, revin=revin, affine=affine,
-                                  subtract_last=subtract_last, verbose=verbose, distribution_type=distribution_type, quantiles=quantiles, **kwargs)
+                                  subtract_last=subtract_last, verbose=verbose, distribution_type=distribution_type, quantiles=quantiles, rank=rank, **kwargs)
         else:
             self.model = PatchTST_backbone(c_in=c_in, context_window = context_window, target_window=target_window, patch_len=patch_len, stride=stride, 
                                   max_seq_len=max_seq_len, n_layers=n_layers, d_model=d_model,
@@ -86,7 +86,7 @@ class PatchTST(nn.Module):
                                   attn_mask=attn_mask, res_attention=res_attention, pre_norm=pre_norm, store_attn=store_attn,
                                   pe=pe, learn_pe=learn_pe, fc_dropout=fc_dropout, head_dropout=head_dropout, padding_patch = padding_patch,
                                   pretrain_head=pretrain_head, head_type=head_type, individual=individual, revin=revin, affine=affine,
-                                  subtract_last=subtract_last, verbose=verbose, distribution_type=distribution_type, quantiles=quantiles, **kwargs)
+                                  subtract_last=subtract_last, verbose=verbose, distribution_type=distribution_type, quantiles=quantiles, rank=rank, **kwargs)
 
 
     def forward(self, history_data: torch.Tensor, future_data: torch.Tensor, batch_seen: int, epoch: int, train: bool, **kwargs) -> torch.Tensor:

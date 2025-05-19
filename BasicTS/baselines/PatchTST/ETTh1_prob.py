@@ -47,6 +47,7 @@ MODEL_PARAM = {
     "head_type": "probabilistic",
     "distribution_type": "m_lr_gaussian", 
     "quantiles": [],#[0.1, 0.25, 0.5, 0.75, 0.9],
+    "rank": 12,
 }
 NUM_EPOCHS = 100
 

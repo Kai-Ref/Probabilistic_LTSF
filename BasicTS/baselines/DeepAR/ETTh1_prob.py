@@ -116,7 +116,15 @@ CFG.TRAIN.OPTIM.PARAM = {
     'lr':0.003,
 }
 # Learning rate scheduler settings
-
+CFG.TRAIN.LR_SCHEDULER = EasyDict()
+CFG.TRAIN.LR_SCHEDULER.TYPE = "MultiStepLR"
+CFG.TRAIN.LR_SCHEDULER.PARAM = {
+    "milestones": [1, 25],
+    "gamma": 0.5
+}
+CFG.TRAIN.CLIP_GRAD_PARAM = {
+    'max_norm': 5.0
+}
 # Train data loader settings
 CFG.TRAIN.DATA = EasyDict()
 CFG.TRAIN.DATA.BATCH_SIZE = 64

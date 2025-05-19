@@ -20,7 +20,7 @@ class PatchTST_backbone(nn.Module):
                  padding_var:Optional[int]=None, attn_mask:Optional[Tensor]=None, res_attention:bool=True, pre_norm:bool=False, store_attn:bool=False,
                  pe:str='zeros', learn_pe:bool=True, fc_dropout:float=0., head_dropout = 0, padding_patch = None,
                  pretrain_head:bool=False, head_type = 'flatten', individual = False, revin = True, affine = True, subtract_last = False,
-                 verbose:bool=False, distribution_type="gaussian", quantiles=None, **kwargs):
+                 verbose:bool=False, distribution_type="gaussian", quantiles=None, rank=48, **kwargs):
     
         super().__init__()
     
@@ -57,7 +57,7 @@ class PatchTST_backbone(nn.Module):
         elif head_type == 'flatten': 
             self.head = Flatten_Head(self.individual, self.n_vars, self.head_nf, target_window, head_dropout=head_dropout)
         elif head_type == 'probabilistic':
-            self.head = Prob_Head(self.individual, self.n_vars, self.head_nf, target_window, distribution_type, quantiles, head_dropout=head_dropout)
+            self.head = Prob_Head(self.individual, self.n_vars, self.head_nf, target_window, distribution_type, quantiles, rank, head_dropout=head_dropout)
         
 
     def forward(self, z):                                                                   # z: [bs x nvars x seq_len]
@@ -90,7 +90,7 @@ class PatchTST_backbone(nn.Module):
                     )
 
 class Prob_Head(nn.Module):
-    def __init__(self, individual, n_vars, nf, target_window, distribution_type, quantiles, head_dropout=0):
+    def __init__(self, individual, n_vars, nf, target_window, distribution_type, quantiles, rank, head_dropout=0):
         super().__init__()
     
         self.individual = individual
@@ -103,12 +103,12 @@ class Prob_Head(nn.Module):
             self.flattens = nn.ModuleList()
             for i in range(self.n_vars):
                 self.flattens.append(nn.Flatten(start_dim=-2))
-                self.prob_heads.append(ProbabilisticHead(nf, target_window, distribution_type, quantiles))
+                self.prob_heads.append(ProbabilisticHead(nf, target_window, distribution_type, quantiles, rank))
                 self.dropouts.append(nn.Dropout(head_dropout))
         else:
             self.flatten = nn.Flatten(start_dim=-2)
             # nf: d_model * patch_num, target_window
-            self.prob_head = ProbabilisticHead(nf, target_window, distribution_type, quantiles) 
+            self.prob_head = ProbabilisticHead(nf, target_window, distribution_type, quantiles, rank) 
             self.dropout = nn.Dropout(head_dropout)
         
     def forward(self, x):                                 # x: [bs x nvars x d_model x patch_num]
