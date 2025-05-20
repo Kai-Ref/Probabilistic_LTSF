@@ -488,6 +488,34 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
         return metrics_results
 
 
+    def test_iters(self, iter_index: int, data: Union[torch.Tensor, Tuple]):
+        """Validation iteration process.
+
+        Args:
+            iter_index (int): Current iteration index.
+            data (Union[torch.Tensor, Tuple]): Data provided by DataLoader.
+        """
+
+        forward_return = self.forward(data=data, epoch=None, iter_num=iter_index, train=False)
+        loss = self.metric_forward(self.loss, forward_return)
+        self.update_epoch_meter('test/loss', loss.item())
+
+        if not self.if_evaluate_on_gpu:
+            forward_return['prediction'] = forward_return['prediction'].detach().cpu()
+            forward_return['target'] = forward_return['target'].detach().cpu()
+            forward_return['inputs'] = forward_return['inputs'].detach().cpu()
+
+        for metric_name, metric_func in self.metrics.items():            
+            metric_item = self.metric_forward(metric_func, forward_return)
+            if type(metric_func) is Evaluator:
+                for key, value in metric_item.items():
+                    try:
+                        self.update_epoch_meter(f'ProbTS-test/{key}', value)
+                    except KeyError:
+                        self.register_epoch_meter(f'ProbTS-test/{key}', 'test', '{:.4f}')
+                        self.update_epoch_meter(f'ProbTS-test/{key}', value)
+            else:
+                self.update_epoch_meter(f'test/{metric_name}', metric_item.item())
 
     @torch.no_grad()
     @master_only
@@ -500,36 +528,51 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
             save_results (bool): Save the test results. Defaults to False.
         """
 
-        prediction, target, inputs = [], [], []
+        # prediction, target, inputs = [], [], []
+        data_iter = tqdm(self.test_data_loader)
+        for iter_index, data in enumerate(data_iter):
+            self.test_iters(iter_index, data)
+            # forward_return = self.forward(data, epoch=None, iter_num=None, train=False)
 
-        for data in tqdm(self.test_data_loader):
-            forward_return = self.forward(data, epoch=None, iter_num=None, train=False)
+            # loss = self.metric_forward(self.loss, forward_return)
+            # self.update_epoch_meter('test/loss', loss.item())
 
-            loss = self.metric_forward(self.loss, forward_return)
-            self.update_epoch_meter('test/loss', loss.item())
+        # Now log validation averages to wandb
+        if (self.use_wandb) and (train_epoch is not None):
+            # Calculate proper global step at end of validation
+            global_step = train_epoch * self.iter_per_epoch
+            
+            # Log all validation metrics at once
+            wandb_dict = {}            
+            # Add metrics from meter pool
+            for meter_name in self.meter_pool._pool.keys():
+                if 'test' in meter_name:
+                    meter_value = self.meter_pool._pool[meter_name]['meter'].avg
+                    wandb_dict[f'epoch_summary/{meter_name}'] = meter_value
+                    wandb_dict[f'{meter_name}'] = meter_value
+            wandb.log(wandb_dict, step=global_step)
+        #     if not self.if_evaluate_on_gpu:
+        #         forward_return['prediction'] = forward_return['prediction'].detach().cpu()
+        #         forward_return['target'] = forward_return['target'].detach().cpu()
+        #         forward_return['inputs'] = forward_return['inputs'].detach().cpu()
 
-            if not self.if_evaluate_on_gpu:
-                forward_return['prediction'] = forward_return['prediction'].detach().cpu()
-                forward_return['target'] = forward_return['target'].detach().cpu()
-                forward_return['inputs'] = forward_return['inputs'].detach().cpu()
+        #     prediction.append(forward_return['prediction'])
+        #     target.append(forward_return['target'])
+        #     inputs.append(forward_return['inputs'])
 
-            prediction.append(forward_return['prediction'])
-            target.append(forward_return['target'])
-            inputs.append(forward_return['inputs'])
-
-        prediction = torch.cat(prediction, dim=0)
-        target = torch.cat(target, dim=0)
-        inputs = torch.cat(inputs, dim=0)
+        # prediction = torch.cat(prediction, dim=0)
+        # target = torch.cat(target, dim=0)
+        # inputs = torch.cat(inputs, dim=0)
         
         # if self.model_name == 'DeepAR': # taken from DeepAR_Runner
         #     returns_all = {'prediction': prediction[:, -self.output_seq_len:, :, :],
         #                 'target': target[:, -self.output_seq_len:, :, :],
         #                 'inputs': inputs}
         # else:
-        returns_all = {'prediction': prediction, 'target': target, 'inputs': inputs}
+        # returns_all = {'prediction': prediction, 'target': target, 'inputs': inputs}
         
         
-        metrics_results = self.compute_evaluation_metrics(returns_all)
+        # metrics_results = self.compute_evaluation_metrics(returns_all)
 
         # save
         save_metrics, save_results = False, False
@@ -543,7 +586,7 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
             with open(os.path.join(self.ckpt_save_dir, 'test_metrics.json'), 'w') as f:
                 json.dump(metrics_results, f, indent=4)
 
-        return returns_all
+        # return returns_all
 
     def on_epoch_end(self, epoch: int) -> None:
         """
