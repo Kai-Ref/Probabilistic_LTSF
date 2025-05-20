@@ -94,3 +94,5 @@ target/
 datasets/
 wandb/
 *.out
+*.pt
+tensorboard/
