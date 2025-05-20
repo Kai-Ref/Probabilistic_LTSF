@@ -27,7 +27,10 @@ MODEL_NAME="PatchTST"
 # SweepID='' # - 336
 # SweepID='js2yngzt' # - 720
 # -------------------------- IL 96
-SweepID='fd40u7me' # - 720
+# SweepID='fd40u7me' # - 720 multivariate
+SweepID='7hg7ll8o' # - 720 univariate 
+# SweepID='' # - 720 quantile 
+
 
 # iTransformer
 # MODEL_NAME="iTransformer"
@@ -47,7 +50,6 @@ SweepID='fd40u7me' # - 720
 
 # python ~/Probabilistic_LTSF/BasicTS/experiments/hp_tuning.py -c baselines/${MODEL_NAME}/${DATASET_NAME}.py -s /home/kreffert/Probabilistic_LTSF/BasicTS/hp_tuning/${MODEL_NAME}.yaml --gpus '0'
 python ~/Probabilistic_LTSF/BasicTS/experiments/hp_tuning.py -c baselines/${MODEL_NAME}/${DATASET_NAME}.py -s ${SweepID} --gpus '0'
-
 
 # python ~/Probabilistic_LTSF/BasicTS/experiments/hp_tuning.py -c baselines/PatchTST/ETTh1_prob.py -s 'fd40u7me' --gpus '0, 1'
 # python ~/Probabilistic_LTSF/BasicTS/experiments/train.py -c baselines/PatchTST/ETTh1_prob.py --gpus '0'
