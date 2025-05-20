@@ -22,6 +22,8 @@ MODEL_NAME="PatchTST"
 # SweepID='' # - 192
 # SweepID='' # - 336
 SweepID='' # - 720
+# -------------------------- IL 96
+SweepID='fd40u7me' # - 720
 
 # iTransformer
 # MODEL_NAME="iTransformer"

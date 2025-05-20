@@ -1,7 +1,3 @@
 # This file may be used to create an environment using:
 # $ conda create --name <env> --file <this file>
-matplotlib
-numpy
-pandas
-pyyaml
-scikit-learn
+pip install matplotlib numpy pandas pyyaml easy-torch easydict packaging setproctitle scikit-learn tables sympy openpyxl setuptools numpy gluonts wandb scoringrules

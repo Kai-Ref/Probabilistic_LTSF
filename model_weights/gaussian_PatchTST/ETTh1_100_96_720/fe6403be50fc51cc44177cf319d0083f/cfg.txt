@@ -1,0 +1,93 @@
+DESCRIPTION: An Example Config
+GPU_NUM: 1
+RUNNER: <class 'basicts.runners.runner_zoo.simple_prob_tsf_runner.SimpleProbTimeSeriesForecastingRunner'>
+USE_WANDB: False
+DATASET:
+  NAME: ETTh1
+  TYPE: <class 'basicts.data.simple_tsf_dataset.TimeSeriesForecastingDataset'>
+  PARAM:
+    dataset_name: ETTh1
+    train_val_test_ratio: [0.6, 0.2, 0.2]
+    input_len: 96
+    output_len: 720
+SCALER:
+  TYPE: <class 'basicts.scaler.z_score_scaler.ZScoreScaler'>
+  PARAM:
+    dataset_name: ETTh1
+    train_ratio: 0.6
+    norm_each_channel: True
+    rescale: False
+MODEL:
+  NAME: PatchTST
+  ARCH: <class 'baselines.PatchTST.arch.patchtst_arch.PatchTST'>
+  PARAM:
+    enc_in: 7
+    seq_len: 96
+    pred_len: 720
+    e_layers: 2
+    n_heads: 2
+    d_model: 32
+    d_ff: 32
+    dropout: 0.3
+    fc_dropout: 0.3
+    head_dropout: 0.0
+    patch_len: 32
+    stride: 64
+    individual: 1
+    padding_patch: end
+    revin: 1
+    affine: 1
+    subtract_last: 1
+    decomposition: 1
+    kernel_size: 25
+    head_type: probabilistic
+    distribution_type: gaussian
+    prob_args:
+      rank: 13
+      base_distribution: laplace
+      base_prob_args:
+        rank: 7
+        quantiles: []
+      n_flows: 2
+      flow_hidden_dim: 16
+      flow_type: sigmoidal
+  FORWARD_FEATURES: [0]
+  TARGET_FEATURES: [0]
+METRICS:
+  FUNCS:
+    NLL: nll_loss
+    CRPS: crps
+  TARGET: NLL
+  NULL_VAL: nan
+TRAIN:
+  RESUME_TRAINING: False
+  EARLY_STOPPING_PATIENCE: 5
+  NUM_EPOCHS: 100
+  CKPT_SAVE_DIR: /pfs/data6/home/ma/ma_ma/ma_kreffert/Probabilistic_LTSF/model_weights/gaussian_PatchTST/ETTh1_100_96_720
+  LOSS: nll_loss
+  OPTIM:
+    TYPE: Adam
+    PARAM:
+      lr: 0.0002
+      weight_decay: 0.0001
+  LR_SCHEDULER:
+    TYPE: MultiStepLR
+    PARAM:
+      milestones: [1, 25]
+      gamma: 0.5
+  CLIP_GRAD_PARAM:
+    max_norm: 5.0
+  DATA:
+    BATCH_SIZE: 64
+    SHUFFLE: True
+VAL:
+  INTERVAL: 1
+  DATA:
+    BATCH_SIZE: 64
+TEST:
+  INTERVAL: 1
+  DATA:
+    BATCH_SIZE: 64
+EVAL:
+  USE_GPU: True
+MD5: fe6403be50fc51cc44177cf319d0083f
