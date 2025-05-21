@@ -51,6 +51,7 @@ class MinMaxScaler(BaseScaler):
         train_data = data[:train_size, :, self.target_channel].copy()
 
         # compute minimum and maximum values for normalization
+        self.norm_each_channel = norm_each_channel
         if norm_each_channel:
             self.min = np.min(train_data, axis=0, keepdims=True)
             self.max = np.max(train_data, axis=0, keepdims=True)
@@ -110,12 +111,16 @@ class MinMaxScaler(BaseScaler):
             S_full = input_data[..., 1+rank:]  # [batch_size, nvars, output_dim, 1]
 
             range_ = (_max - _min).to(input_data.device)
+            if not self.norm_each_channel: # if not norm_each channel then range_ is a single value with shape torch.Size([])
+                range_ = range_.view(1, 1, 1, 1)
+            else:
+                range_ = range_.view(1, 1, -1, 1)
 
             # Rescale low-rank matrix (per variable)
-            input_data[..., 1:1+rank] = V_full * range_.view(1, 1, 7, 1)
+            input_data[..., 1:1+rank] = V_full * range_
 
             # Rescale diagonal (variance) part: scale^2
-            input_data[..., 1+rank:] = S_full * range_.view(1, 1, 7, 1) * range_.view(1, 1, 7, 1) #range_.view(1, 1, 1, 7)
+            input_data[..., 1+rank:] = S_full * range_ * range_ 
         else:
             input_data[..., self.target_channel] = input_data[..., self.target_channel] * (_max - _min) + _min
         return input_data

@@ -225,7 +225,7 @@ class LowRankMultivariateGaussianHead(BaseDistribution):
         S_full = prediction[..., 1+rank:]  # [batch_size, nvars, output_dim, 1]
         
         # Ensure positive values for variance scaling factors
-        S_full = torch.clamp(S_full, min=1e-6)
+        S_full = torch.clamp(S_full, min=1e-4)
         for i in range(prediction.shape[1]):  # Loop over nvars
             # Extract data for this variable
             var_mean = mean[:, i, :]  # [batch_size, output_dim]
@@ -299,27 +299,40 @@ class ImplicitQuantileHead(BaseDistribution):
     def __init__(self, input_dim, output_dim, prob_args={}):
         super().__init__(input_dim, output_dim, prob_args=prob_args)
         self.num_layers = prob_args['num_layers'] #1
-        self.quantiles = prob_args['quantiles']
-        self.quantile_embed_dim = prob_args['quantile_embed_dim'] #64
-        self.cos_embedding_dim = self.quantile_embed_dim
+        self.decoding = prob_args['decoding'] # either hadamard or concat
+        self.cos_embedding_dim = prob_args['cos_embedding_dim']
+        if self.decoding == "hadamard":
+            self.quantile_embed_dim = 96 #prob_args['quantile_embed_dim']
+            self.qr_head = nn.Linear(self.quantile_embed_dim, output_dim)
+        else:
+            self.quantile_embed_dim = prob_args['quantile_embed_dim'] 
+            self.qr_head = nn.Linear(input_dim + self.quantile_embed_dim, output_dim)
         self.quantile_embedding = nn.Linear(self.cos_embedding_dim, self.quantile_embed_dim)
-        self.qr_head = nn.Linear(input_dim + self.quantile_embed_dim, output_dim)
         self.activation = nn.ReLU()
+        self.quantiles = prob_args['quantiles'] # only needed in eval mode ->e.g. val/test quantile loss
+
+    def _make_pred(self, u, x):
+        # IQN Cosine Embedding for Quantile Processing
+        i = torch.arange(1, self.cos_embedding_dim + 1, device=x.device).float().unsqueeze(0)  # [1, embed_dim]
+        cos_features = torch.cos(torch.pi * u * i)  # Cosine embedding
+        phi_u = self.activation(self.quantile_embedding(cos_features))  # Learnable transformation
+        if len(x.shape)<3:# this is the case when individual is used
+            x = x.unsqueeze(dim=1) # shape: [64, 1, 60]
+        phi_u = phi_u.unsqueeze(1).expand(-1, x.shape[1], -1)  # Shape: [64, x.shape[1], 60]
+
+        if self.decoding == "concat": # Concatenate quantile representation to input x
+            x = torch.cat([x, phi_u], dim=-1) # [batch_size, output_dim]
+        elif self.decoding == "hadamard": # Element-wise interaction
+            x = x * (1 + phi_u)  # [batch_size, output_dim]
+
+        predictions = self.qr_head(x).squeeze(1)  # [batch_size, output_dim]
+        return predictions
 
     def forward(self, x):
         batch_size = x.size(0)
         if self.training:
-            u = torch.rand(batch_size, 1).to(x.device)  # # [batch_size, 1] - One random quantile level per element
-            # IQN Cosine Embedding for Quantile Processing
-            i = torch.arange(1, self.cos_embedding_dim + 1, device=x.device).float().unsqueeze(0)  # [1, embed_dim]
-            cos_features = torch.cos(torch.pi * u * i)  # Cosine embedding
-            phi_u = self.activation(self.quantile_embedding(cos_features))  # Learnable transformation
-            if len(x.shape)<3:# this is the case when individual is used
-                x = x.unsqueeze(dim=1) # shape: [64, 1, 60]
-            phi_u = phi_u.unsqueeze(1).expand(-1, x.shape[1], -1)  # Shape: [64, x.shape[1], 60]
-            # Concatenate quantile representation to input x
-            x_augmented = torch.cat([x, phi_u], dim=-1).squeeze() # [batch_size, output_dim]
-            predictions = self.qr_head(x_augmented)  # [batch_size, output_dim]
+            u = torch.rand(batch_size, 1).to(x.device)  # [batch_size, 1] - One random quantile level per element
+            predictions = self._make_pred(u, x)
             if predictions.dim() != u.dim():
                 u = u.unsqueeze(-1)
                 batch_size, num_series, length = predictions.shape
@@ -330,21 +343,11 @@ class ImplicitQuantileHead(BaseDistribution):
             quantile_levels = torch.tensor(self.quantiles, device=x.device).float()  # Convert to tensor
             predictions = []
             with torch.no_grad():
-                for u in quantile_levels:
-                    u = torch.full((x.size(0), 1), u, device=x.device)  # Same tau for entire batch
-                    # IQN Cosine Embedding for Quantile Processing
-                    i = torch.arange(1, self.cos_embedding_dim + 1, device=x.device).float().unsqueeze(0)  # [1, embed_dim]
-                    cos_features = torch.cos(torch.pi * u * i)  # Cosine embedding
-                    phi_u = self.activation(self.quantile_embedding(cos_features))  # Learnable transformation
-                    if len(x.shape)<3:# this is the case when individual is used
-                        x = x.unsqueeze(dim=1) # shape: [64, 1, 60]
-                    phi_u = phi_u.unsqueeze(1).expand(-1, x.shape[1], -1)  # Shape: [64, x.shape[1], 60]
-                    # Concatenate quantile representation to input x
-                    x_augmented = torch.cat([x, phi_u], dim=-1).squeeze()
-                    pred = self.qr_head(x_augmented)  # [batch_size, num_quantiles, output_dim]
-                    #return torch.cat([pred, u.unsqueeze(-1)], dim=-1)  # Append tau to output
+                for tau in quantile_levels:
+                    u = torch.full((x.size(0), 1), tau, device=x.device)  # Same tau for entire batch
+                    pred = self._make_pred(u, x)
                     predictions.append(pred)
-            predictions = torch.stack(predictions, dim=1) # [batch_size, num_quantiles, (num_series), output_dim] -> num_series not always present, but for example when individual=False
+            predictions = torch.stack(predictions, dim=1) # [batch_size, num_quantiles, (num_series), output_dim] -> num_series not always present, for example when individual=False
             if predictions.dim() == 3:
                 predictions = predictions.permute(0,2,1)  # [batch_size, output_dim, num_quantiles]
             else:

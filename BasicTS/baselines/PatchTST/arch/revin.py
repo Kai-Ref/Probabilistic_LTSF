@@ -54,24 +54,16 @@ class RevIN(nn.Module):
         return x
 
     def _denormalize(self, x):
-        if self.distribution_type in ['gaussian', 'laplace', 'student_t', 'm_lr_gaussian']:
-            x = x.clone()  # Clone to avoid in-place ops on a view
+        x = x.clone()  # Clone to avoid in-place ops on a view
+        if self.distribution_type in ['gaussian', 'laplace', 'student_t']:
             if self.affine:
                 denom = self.affine_weight + self.eps**2
                 x_mean = (x[..., 0] - self.affine_bias) / denom
-                if self.distribution_type == 'm_lr_gaussian':
-                    rank = self.prob_args['rank']
-                    V = x[..., 1:1+rank]
-                    S = x[..., 1+rank:].squeeze()
-                    std = self.stdev.view(-1, 1, self.stdev.shape[-1], 1)  # [B, 1, D, 1]
-                    V = V * std
-                    
-                    # Rescale S: [batch, ..., D]
-                    S = S * self.stdev * self.stdev
-                    x_var = torch.cat([V, S.unsqueeze(-1)], dim=-1)
-                else:
-                    x_var = x[..., 1] / denom
-                    x_var = x_var * self.stdev
+                x_var = x[..., 1] / denom
+                x_var = x_var * self.stdev
+            else:
+                x_mean = x[..., 0]
+                x_var = x[..., 1] * self.stdev
 
             x_mean = x_mean * self.stdev
             if self.subtract_last:
@@ -79,11 +71,42 @@ class RevIN(nn.Module):
             else:
                 x_mean = x_mean + self.mean
 
-            # Stack back the mean and variance/std (keep last dim size same)
-            if self.distribution_type == 'm_lr_gaussian':
-                x = torch.cat([x_mean.unsqueeze(-1), x_var], dim=-1)
+            x = torch.stack([x_mean, x_var], dim=-1)
+
+        elif self.distribution_type in ['m_lr_gaussian']:
+            # adjust mean
+            if self.affine:
+                denom = self.affine_weight + self.eps**2
+                x_mean = (x[..., 0] - self.affine_bias) / denom
             else:
-                x = torch.stack([x_mean, x_var], dim=-1)
+                x_mean = x[..., 0]
+            x_mean = x_mean * self.stdev
+
+            if self.subtract_last:
+                x_mean = x_mean + self.last
+            else:
+                x_mean = x_mean + self.mean
+
+            # then adjust variance
+            rank = self.prob_args['rank']
+            V = x[..., 1:1+rank]
+            S = x[..., 1+rank:].squeeze()
+
+            if self.affine:
+                denom_sq = (self.affine_weight + self.eps**2)**2
+                V = V / (self.affine_weight + self.eps**2).view(1, 1, -1, 1)  # Match std scale
+                S = S / denom_sq.view(1, 1, -1)  # Undo variance scaling
+
+            std = self.stdev.view(-1, 1, self.stdev.shape[-1], 1)  # [B, 1, D, 1]
+            V = V * std
+            
+            # Rescale S: [batch, ..., D]
+            S = S * self.stdev * self.stdev
+            x_var = torch.cat([V, S.unsqueeze(-1)], dim=-1)
+
+            # Stack back the mean and variance/std (keep last dim size same)
+            x = torch.cat([x_mean.unsqueeze(-1), x_var], dim=-1)
+
         elif self.distribution_type in ['quantile', 'i_quantile']:
             if self.affine:
                 x = x - self.affine_bias.unsqueeze(-1)

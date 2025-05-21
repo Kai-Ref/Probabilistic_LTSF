@@ -41,12 +41,16 @@ MODEL_PARAM = {
     "padding_patch": "end",                     # None: None; end: padding on the end
     "revin": 1,                                 # RevIN; True 1 False 0
     "affine": 1,                                # RevIN-affine; True 1 False 0
-    "subtract_last": 1,                         # 0: subtract mean; 1: subtract last
-    "decomposition": 1,                         # decomposition; True 1 False 0
+    "subtract_last": 0,                         # 0: subtract mean; 1: subtract last
+    "decomposition": 0,                         # decomposition; True 1 False 0
     "kernel_size": 25,                          # decomposition-kernel
     "head_type": "probabilistic",
-    "distribution_type": "quantile",
+    "distribution_type": "i_quantile",
     "prob_args":{"quantiles": [0.005, 0.025, 0.165, 0.25, 0.5, 0.75, 0.835, 0.975, 0.995], #[0.1, 0.25, 0.5, 0.75, 0.9],
+                "num_layers": 2, 
+                "quantile_embed_dim": 64, 
+                "cos_embedding_dim": 128,
+                "decoding": "concat",
                 # "rank":13,
                 # "base_distribution": "laplace",
                 # "base_prob_args": {"rank":7, "quantiles": [],},

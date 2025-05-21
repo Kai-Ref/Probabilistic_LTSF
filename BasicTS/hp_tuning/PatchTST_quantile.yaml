@@ -58,11 +58,19 @@ parameters:
   MODEL.PARAM.head_type:
     values: ['probabilistic']
   MODEL.PARAM.distribution_type:
-    # values: ['gaussian', 'laplace', 'student_t'] #, 'flow'] # flow 
-    values: ['m_lr_gaussian']
-  MODEL.PARAM.prob_args.rank:
-    values: [7, 36, 72, 110, 180, 360, 480]
-
+    values: ['quantile', "i_quantile"] #['gaussian', 'laplace', 'student_t'] #, 'flow'] # flow 
+    # values: ['m_lr_gaussian']
+  MODEL.PARAM.prob_args.quantiles:
+    values: [[0.005, 0.025, 0.165, 0.25, 0.5, 0.75, 0.835, 0.975, 0.995]]
+  MODEL.PARAM.prob_args.num_layers:
+    values: [2, 3, 4, 5, 7, 10]
+  MODEL.PARAM.prob_args.quantile_embed_dim: # note this affects
+    values: [8, 16, 32, 64, 128]
+  MODEL.PARAM.prob_args.decoding:
+    values: ["concat", "hadamard"]
+  MODEL.PARAM.prob_args.cos_embedding_dim:
+    values: [8, 16, 32, 64, 128]
+    
   # Basic Params
   NUM_EPOCHS:
     values: [100]

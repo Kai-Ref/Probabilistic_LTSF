@@ -18,7 +18,7 @@ conda activate BasicTS
 # prediction length and input length
 # OUTPUT_LEN=100
 
-DATASET_NAME="ETTh1_prob"
+DATASET_NAME="ETTh1_prob_quantile"
 # PatchTST
 MODEL_NAME="PatchTST"
 # regular settings - 336
@@ -27,7 +27,7 @@ MODEL_NAME="PatchTST"
 # SweepID='' # - 336
 # SweepID='js2yngzt' # - 720
 # -------------------------- IL 96
-SweepID='ipse2z5g' # - 720 multivariate
+# SweepID='fd40u7me' # - 720 multivariate
 # SweepID='7hg7ll8o' # - 720 univariate 
 # SweepID='' # - 720 quantile 
 
@@ -48,9 +48,9 @@ SweepID='ipse2z5g' # - 720 multivariate
 # SweepID='' # - 336
 # SweepID='sskubw3c' # - 720
 
-# python ~/Probabilistic_LTSF/BasicTS/experiments/hp_tuning.py -c baselines/${MODEL_NAME}/${DATASET_NAME}.py -s /home/kreffert/Probabilistic_LTSF/BasicTS/hp_tuning/${MODEL_NAME}.yaml --gpus '0'
-python ~/Probabilistic_LTSF/BasicTS/experiments/hp_tuning.py -c baselines/${MODEL_NAME}/${DATASET_NAME}.py -s ${SweepID} --gpus '0'
+python ~/Probabilistic_LTSF/BasicTS/experiments/hp_tuning.py -c baselines/${MODEL_NAME}/${DATASET_NAME}.py -s /home/kreffert/Probabilistic_LTSF/BasicTS/hp_tuning/${MODEL_NAME}_quantile.yaml --gpus '0'
+# python ~/Probabilistic_LTSF/BasicTS/experiments/hp_tuning.py -c baselines/${MODEL_NAME}/${DATASET_NAME}.py -s ${SweepID} --gpus '0'
 
 # python ~/Probabilistic_LTSF/BasicTS/experiments/hp_tuning.py -c baselines/PatchTST/ETTh1_prob.py -s 'fd40u7me' --gpus '0, 1'
 # python ~/Probabilistic_LTSF/BasicTS/experiments/train.py -c baselines/PatchTST/ETTh1_prob.py --gpus '0'
-# python ~/Probabilistic_LTSF/BasicTS/experiments/train.py -c final_weights/PatchTST/univariate/ETTh1.py --gpus '0'
+# python ~/Probabilistic_LTSF/BasicTS/experiments/train.py -c final_weights/PatchTST/univariate/ETTh1_prob_quantile.py --gpus '0'

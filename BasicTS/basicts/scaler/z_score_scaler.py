@@ -52,6 +52,7 @@ class ZScoreScaler(BaseScaler):
         train_data = data[:train_size, :, self.target_channel].copy()
 
         # compute mean and standard deviation
+        self.norm_each_channel = norm_each_channel
         if norm_each_channel:
             self.mean = np.mean(train_data, axis=0, keepdims=True)
             self.std = np.std(train_data, axis=0, keepdims=True)
@@ -113,11 +114,17 @@ class ZScoreScaler(BaseScaler):
 
             # rescale the low rank matrix
             V_full = input_data[..., 1:1+rank]  # [batch_size, nvars, output_dim, rank]
-            input_data[..., 1:1+rank] = V_full * std.view(1, 1, 7, 1) 
+
+            if not self.norm_each_channel: # if not norm_each channel then std is a single value with shape torch.Size([])
+                std = std.view(1, 1, 1, 1)
+            else:
+                std = std.view(1, 1, -1, 1)
+
+            input_data[..., 1:1+rank] = V_full * std 
             
             # rescale the diagonal matrix
             S_full = input_data[..., 1+rank:]  # [batch_size, nvars, output_dim, 1]
-            input_data[..., 1+rank:]  = S_full * std.view(1, 1, 7, 1) * std.view(1, 1, 7, 1) 
+            input_data[..., 1+rank:]  = S_full * std * std 
         else:
             input_data[..., self.target_channel] = input_data[..., self.target_channel] * std + mean
         return input_data
