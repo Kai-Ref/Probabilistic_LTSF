@@ -10,7 +10,7 @@ parameters:
   OUTPUT_LEN:
     values: [720]
   RESCALE:
-    values: [True, False]
+    values: [True] #, False]
   NORM_EACH_CHANNEL:
     values: [True, False]
   # INPUT_LEN:

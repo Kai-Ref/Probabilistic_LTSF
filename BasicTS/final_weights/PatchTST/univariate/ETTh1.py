@@ -9,7 +9,7 @@ from basicts.runners import SimpleProbTimeSeriesForecastingRunner, SimpleTimeSer
 from basicts.scaler import ZScoreScaler, MinMaxScaler
 from basicts.utils import get_regular_settings
 
-from .arch import PatchTST
+from baselines.PatchTST.arch import PatchTST
 
 ############################## Hot Parameters ##############################
 # Dataset & Metrics configuration
@@ -18,8 +18,8 @@ regular_settings = get_regular_settings(DATA_NAME)
 INPUT_LEN = 96 # regular_settings['INPUT_LEN']  # Length of input sequence
 OUTPUT_LEN = 720 #regular_settings['OUTPUT_LEN']  # Length of output sequence
 TRAIN_VAL_TEST_RATIO = regular_settings['TRAIN_VAL_TEST_RATIO']  # Train/Validation/Test split ratios
-NORM_EACH_CHANNEL = True #regular_settings['NORM_EACH_CHANNEL'] # Whether to normalize each channel of the data
-RESCALE = True #regular_settings['RESCALE'] # Whether to rescale the data
+NORM_EACH_CHANNEL = False #regular_settings['NORM_EACH_CHANNEL'] # Whether to normalize each channel of the data
+RESCALE = False #regular_settings['RESCALE'] # Whether to rescale the data
 NULL_VAL = regular_settings['NULL_VAL'] # Null value in the data
 # Model architecture and parameters
 MODEL_ARCH = PatchTST
@@ -28,32 +28,25 @@ MODEL_PARAM = {
     "enc_in": NUM_NODES,                        # num nodes
     "seq_len": INPUT_LEN,           # input sequence length
     "pred_len": OUTPUT_LEN,         # prediction sequence length
-    "e_layers": 2,                              # num of encoder layers
+    "e_layers": 5,                              # num of encoder layers
     "n_heads": 2,
-    "d_model": 32,
+    "d_model": 128,
     "d_ff": 32,
-    "dropout": 0.3,
-    "fc_dropout": 0.3,
+    "dropout": 0.2519579501057429,
+    "fc_dropout": 0.22415705226021324,
     "head_dropout": 0.0,
-    "patch_len": 32,
+    "patch_len": 8,
     "stride": 64,
     "individual": 1,                            # individual head; True 1 False 0
     "padding_patch": "end",                     # None: None; end: padding on the end
-    "revin": 1,                                 # RevIN; True 1 False 0
+    "revin": 0,                                 # RevIN; True 1 False 0
     "affine": 1,                                # RevIN-affine; True 1 False 0
-    "subtract_last": 1,                         # 0: subtract mean; 1: subtract last
-    "decomposition": 1,                         # decomposition; True 1 False 0
-    "kernel_size": 25,                          # decomposition-kernel
+    "subtract_last": 0,                         # 0: subtract mean; 1: subtract last
+    "decomposition": 0,                         # decomposition; True 1 False 0
+    "kernel_size": 3,                          # decomposition-kernel
     "head_type": "probabilistic",
-    "distribution_type": "m_lr_gaussian",
-    "prob_args":{#"quantiles": [],#[0.1, 0.25, 0.5, 0.75, 0.9],
-                "rank":13,
-                "base_distribution": "laplace",
-                "base_prob_args": {"rank":7, "quantiles": [],},
-                "n_flows": 2,
-                "flow_hidden_dim": 16,
-                "flow_type": "sigmoidal", # sigmoidal, rectified, affine
-                }, 
+    "distribution_type": "laplace",
+    "prob_args":{}, 
 }
 NUM_EPOCHS = 100
 
@@ -83,7 +76,7 @@ CFG.DATASET.PARAM = EasyDict({
 ############################## Scaler Configuration ##############################
 CFG.SCALER = EasyDict()
 #Scaler settings
-CFG.SCALER.TYPE = ZScoreScaler # Scaler class, None MinMaxScaler ZScoreScaler
+CFG.SCALER.TYPE = MinMaxScaler # Scaler class, None MinMaxScaler ZScoreScaler
 CFG.SCALER.PARAM = EasyDict({
    'dataset_name': DATA_NAME,
    'train_ratio': TRAIN_VAL_TEST_RATIO[0],
@@ -129,24 +122,25 @@ CFG.TRAIN.RESUME_TRAINING = False
 CFG.TRAIN.EARLY_STOPPING_PATIENCE = 5
 CFG.TRAIN.NUM_EPOCHS = NUM_EPOCHS
 CFG.TRAIN.CKPT_SAVE_DIR = os.path.join(
-    'checkpoints',
-    f'{MODEL_PARAM["distribution_type"]}_{MODEL_ARCH.__name__}',
-    '_'.join([DATA_NAME, str(CFG.TRAIN.NUM_EPOCHS), str(INPUT_LEN), str(OUTPUT_LEN)])
+    # f'/pfs/data6/home/ma/ma_ma/ma_kreffert/Probabilistic_LTSF/BasicTS/final_weights/{MODEL_ARCH.__name__}/univariate/',
+    f'final_weights/{MODEL_ARCH.__name__}/univariate/',
+    # f'{MODEL_PARAM["distribution_type"]}_{MODEL_ARCH.__name__}',
+    '_'.join([DATA_NAME, str(INPUT_LEN), str(OUTPUT_LEN)])
 )
 CFG.TRAIN.LOSS = nll_loss
 # Optimizer settings
 CFG.TRAIN.OPTIM = EasyDict()
 CFG.TRAIN.OPTIM.TYPE = "Adam"
 CFG.TRAIN.OPTIM.PARAM = {
-    "lr": 0.0002,
-    "weight_decay": 0.0001,
+    "lr": 0.007489294863115593,
+    "weight_decay": 0.0007204737202528499,
 }
 # Learning rate scheduler settings
 CFG.TRAIN.LR_SCHEDULER = EasyDict()
 CFG.TRAIN.LR_SCHEDULER.TYPE = "MultiStepLR"
 CFG.TRAIN.LR_SCHEDULER.PARAM = {
-    "milestones": [5, 25],
-    "gamma": 0.5
+    "milestones": [1, 25],
+    "gamma": 0.37660827097500454 
 }
 CFG.TRAIN.CLIP_GRAD_PARAM = {
     'max_norm': 5.0
