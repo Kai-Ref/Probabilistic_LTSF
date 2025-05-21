@@ -103,9 +103,8 @@ class ZScoreScaler(BaseScaler):
         if head == 'gaussian':#TODO also handle quantile normalization, i think this only normalizes the first channel...
             input_data[..., 0] = input_data[..., 0] * std + mean
             input_data[..., 1] = input_data[..., 1] * std
-        elif head in ['quantile', 'i_quantile']:
-            input_data[..., 0] = input_data[..., 0] * std + mean # check this
-            raise KeyError
+        elif head in ['quantile', 'i_quantile']: # apply the scaling across all quantile levels
+            input_data = input_data * std.unsqueeze(-1) + mean.unsqueeze(-1)
         elif head in ['m_gaussian', 'm_lr_gaussian']:
             input_data[..., 0] = input_data[..., 0] * std + mean
 

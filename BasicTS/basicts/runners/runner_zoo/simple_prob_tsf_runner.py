@@ -36,8 +36,8 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
 
         # self.quantiles = cfg['MODEL']['PARAM'].get('quantiles', None)
         self.distribution_type = cfg['MODEL']['PARAM'].get('distribution_type', None)
-        self.quantiles = cfg['MODEL']['PARAM'].get('quantiles', None)
         self.prob_args = cfg['MODEL']['PARAM'].get('prob_args', None)
+        self.quantiles = cfg['MODEL']['PARAM']['prob_args'].get('quantiles', None)
         self.output_seq_len = cfg["DATASET"]["PARAM"]["output_len"]
         self.model_name = cfg["MODEL"]["NAME"]
         print(self.model_name)
@@ -280,8 +280,8 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
         if isinstance(metric_func, functools.partial) or (type(metric_func) is Evaluator):
             metric_item = metric_func(**args)
         elif callable(metric_func):
-            if ('quantile_loss' in str(metric_func)) and ('quantiles' not in list(args['prob_args'].keys())):
-                args['prob_args']['quantiles'] = self.quantiles
+            if ('quantile_loss' in str(metric_func)): # and ('quantiles' not in list(self.prob_args.keys())):
+                args['quantiles'] = self.quantiles
             if ('nll_loss' in str(metric_func)) or ('crps' in str(metric_func)):
                 args['distribution_type'] = self.distribution_type
                 args['prob_args'] = self.prob_args
@@ -309,6 +309,7 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
             cl_length = self.curriculum_learning(epoch=epoch)
             forward_return['prediction'] = forward_return['prediction'][:, :cl_length, :, :]
             forward_return['target'] = forward_return['target'][:, :cl_length, :, :]
+        
         loss = self.metric_forward(self.loss, forward_return)
         self.update_epoch_meter('train/loss', loss.item())
         if self.use_wandb and iter_index % 10 == 0:

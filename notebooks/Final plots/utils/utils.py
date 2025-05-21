@@ -4,10 +4,12 @@ import torch
 import logging
 from tqdm import tqdm
 from scipy.stats import norm
+import time
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 __all__ = ["init", "get_predictions"]
 
-def init(model, dataset, path, no_logging=False, cfg_path=None):
+def init(model, dataset, path, no_logging=False, cfg_path=None, set_rescale=False):
     if no_logging:
         logging.disable(logging.CRITICAL)  # Temporarily disable all logging
     #print("This will print, but logs are disabled")
@@ -50,6 +52,10 @@ def init(model, dataset, path, no_logging=False, cfg_path=None):
     args = parse_args()
 
     cfg = init_cfg(args.cfg, save=True)
+    cfg['TRAIN']['RESUME_TRAINING'] = True
+    if set_rescale:
+        cfg['RESCALE'] = True
+        cfg['SCALER']['PARAM']['rescale'] = True
     
     logger = get_logger('easytorch-launcher')
     logger.info('Initializing runner "{}"'.format(cfg['RUNNER']))
@@ -60,25 +66,85 @@ def init(model, dataset, path, no_logging=False, cfg_path=None):
     pred_len = cfg['MODEL']['PARAM'].get('pred_len', None)
     data_name = cfg['DATASET'].get('NAME', None)
     num_epochs = cfg['TRAIN'].get('NUM_EPOCHS', None)
+    
+        
 
-    if "/" in path:
-        save_dir = f'{prefix}/{path}'
-    else:    
-        save_dir = f'{prefix}/Probabilistic_LTSF/BasicTS/checkpoints/{distribution_type}_{model}/{data_name}_{num_epochs}_{seq_len}_{pred_len}/{path}'
 
     
-    runner.ckpt_save_dir = save_dir
-    runner.init_logger(logger_name='easytorch-training', log_file_name='training_log')
+    # runner.ckpt_save_dir = save_dir
+    runner.init_logger(logger_name='easytorch-training', log_file_name=None)
 
 
 
     runner.init_training(cfg)
-    # Your function code here...
     if no_logging:
         logging.disable(logging.NOTSET)  # Re-enable logging
-    return runner
+        
+    if "/" in path:
+        save_path = f'{prefix}/{path}'
+    else:    
+        save_path = f'{prefix}/Probabilistic_LTSF/BasicTS/checkpoints/{distribution_type}_{model}/{data_name}_{num_epochs}_{seq_len}_{pred_len}/{path}'
+        
+    checkpoint = torch.load(save_path)
+    if isinstance(runner.model, DDP):
+        runner.model.module.load_state_dict(checkpoint['model_state_dict'], strict=True)
+    else:
+        runner.model.load_state_dict(checkpoint['model_state_dict'], strict=True)
+    print(checkpoint.keys())
+    return runner, cfg
 
+@torch.no_grad()
+def validate(runner, cfg= None, train_epoch = None):
+    """Validate model.
 
+    Args:
+        cfg (Dict, optional): config
+        train_epoch (int, optional): current epoch if in training process.
+    """
+
+    # init validation if not in training process
+    # if train_epoch is None:
+    #     self.init_validation(cfg)
+
+    runner.logger.info('Start validation.')
+
+    runner.on_validating_start(train_epoch)
+
+    val_start_time = time.time()
+    runner.model.eval()
+    
+    #tqdm process bar
+    data_iter = tqdm(runner.val_data_loader)
+
+    # val loop
+    for iter_index, data in enumerate(data_iter):
+        runner.val_iters(iter_index, data)
+
+    val_end_time = time.time()
+    runner.update_epoch_meter('val/time', val_end_time - val_start_time)
+    
+    # Now log validation averages to wandb
+    if (runner.use_wandb) and (train_epoch is not None):
+        # Calculate proper global step at end of validation
+        global_step = train_epoch * runner.iter_per_epoch
+        
+        # Log all validation metrics at once
+        wandb_dict = {}            
+        # Add metrics from meter pool
+        for meter_name in runner.meter_pool._pool.keys():
+            if 'val' in meter_name:
+                meter_value = runner.meter_pool._pool[meter_name]['meter'].avg
+                wandb_dict[f'epoch_summary/{meter_name}'] = meter_value
+                wandb_dict[f'{meter_name}'] = meter_value
+        wandb.log(wandb_dict, step=global_step)
+    
+    # print val meters
+    runner.print_epoch_meters('val')
+    if train_epoch is not None:
+        # tensorboard plt meters
+        runner.plt_epoch_meters('val', train_epoch // runner.val_interval)
+
+    runner.on_validating_end(train_epoch)
 
 def get_predictions(runner, data_loader="test"):
     if data_loader == "test":

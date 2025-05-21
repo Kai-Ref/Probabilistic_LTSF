@@ -99,9 +99,8 @@ class MinMaxScaler(BaseScaler):
         if head in ['gaussian', 'laplace', 'student_t']:
             input_data[..., 0] = input_data[..., 0] * (_max - _min) + _min
             input_data[..., 1] = input_data[..., 1] * (_max - _min)
-        elif head in ['quantile', 'i_quantile']: #TODO also handle quantile normalization
-            input_data[..., 0] = input_data[..., 0] * (_max - _min) + _min # check this
-            raise KeyError
+        elif head in ['quantile', 'i_quantile']: #apply the rescaling across all specified quantile levels
+            input_data = input_data * (_max.unsqueeze(-1) - _min.unsqueeze(-1)) + _min.unsqueeze(-1)
         elif head in ['m_gaussian', 'm_lr_gaussian']:
             input_data[..., 0] = input_data[..., 0] * (_max - _min) + _min
             # determine the rank

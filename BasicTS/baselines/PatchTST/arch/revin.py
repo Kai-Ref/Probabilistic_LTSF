@@ -84,7 +84,16 @@ class RevIN(nn.Module):
                 x = torch.cat([x_mean.unsqueeze(-1), x_var], dim=-1)
             else:
                 x = torch.stack([x_mean, x_var], dim=-1)
-        else:
+        elif self.distribution_type in ['quantile', 'i_quantile']:
+            if self.affine:
+                x = x - self.affine_bias.unsqueeze(-1)
+                x = x / (self.affine_weight.unsqueeze(-1) + self.eps*self.eps)
+            x = x * self.stdev.unsqueeze(-1)
+            if self.subtract_last:
+                x = x + self.last.unsqueeze(-1)
+            else:
+                x = x + self.mean.unsqueeze(-1)
+        else: # previous implementation for point forecasts
             if self.affine:
                 x = x - self.affine_bias
                 x = x / (self.affine_weight + self.eps*self.eps)

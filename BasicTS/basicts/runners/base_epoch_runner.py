@@ -756,8 +756,8 @@ class BaseEpochRunner(metaclass=ABCMeta):
             if self.scheduler is not None:
                 self.scheduler.last_epoch = checkpoint_dict['epoch']
             self.logger.info('Resume training')
-        except (IndexError, OSError, KeyError):
-            pass
+        except (IndexError, OSError, KeyError) as e:
+            self.logger.error(f'ERROR LOADING MODEL: {e}', exc_info=True)
 
     def backward(self, loss: torch.Tensor):
         """Backward and update params.

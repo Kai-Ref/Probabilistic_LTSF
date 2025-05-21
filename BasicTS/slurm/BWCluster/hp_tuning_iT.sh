@@ -1,8 +1,8 @@
 #!/bin/bash
-#SBATCH -p gpu_a100_il  # Use the dev_gpu_4_a100 partition with A100 GPUs dev_gpu_4
+#SBATCH -p gpu_h100_il  # Use the dev_gpu_4_a100 partition with A100 GPUs dev_gpu_4
 #SBATCH -n 1                   # Number of tasks (1 for single node)
 #SBATCH -t 120           # Time limit (10 minutes for debugging purposes)
-#SBATCH --mem=50000             # Memory request (adjust as needed)
+#SBATCH --mem=60000             # Memory request (adjust as needed)
 #SBATCH --gres=gpu:1           # Request 1 GPU (adjust if you need more)
 #SBATCH --cpus-per-task=16     # Number of CPUs per GPU (16 for A100)
 #SBATCH --ntasks-per-node=1    # Number of tasks per node (1 in this case)
@@ -21,9 +21,11 @@ MODEL_NAME="PatchTST"
 # SweepID='' # -96 -> maybe have to do that again because Scaler/Filler params did not adjust?
 # SweepID='' # - 192
 # SweepID='' # - 336
-SweepID='' # - 720
+# SweepID='' # - 720
 # -------------------------- IL 96
-SweepID='fd40u7me' # - 720
+SweepID='fd40u7me' # - 720 multivariate
+# SweepID='7hg7ll8o' # - 720 univariate 
+# SweepID='' # - 720 quantile 
 
 # iTransformer
 # MODEL_NAME="iTransformer"
