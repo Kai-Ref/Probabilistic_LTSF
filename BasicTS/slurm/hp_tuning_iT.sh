@@ -27,7 +27,7 @@ MODEL_NAME="PatchTST"
 # SweepID='' # - 336
 # SweepID='js2yngzt' # - 720
 # -------------------------- IL 96
-SweepID='ipse2z5g' # - 720 multivariate
+SweepID='bz7to3l3' # - 720 multivariate
 # SweepID='7hg7ll8o' # - 720 univariate 
 # SweepID='' # - 720 quantile 
 

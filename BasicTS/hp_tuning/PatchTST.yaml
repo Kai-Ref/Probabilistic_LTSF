@@ -37,6 +37,10 @@ parameters:
     min: 0.01
     max: 0.4
     distribution: uniform
+  MODEL.PARAM.attn_dropout:
+    min: 0.01
+    max: 0.4
+    distribution: uniform
   MODEL.PARAM.padding_patch:
     values: ['None', 'end']
   MODEL.PARAM.patch_len:
@@ -55,6 +59,16 @@ parameters:
     values: [0, 1]
   MODEL.PARAM.kernel_size:
     values: [3, 7, 13, 25, 49]
+  MODEL.PARAM.pe:
+    values: ['normal', 'zeros', 'zero', uniform', 'lin1d', 'exp1d', 'lin2d', 'exp2d', 'sincos', 'None']
+  MODEL.PARAM.learn_pe:
+    values: [True]
+  MODEL.PARAM.norm:
+    values: ['LayerNorm', 'BatchNorm']
+  MODEL.PARAM.act:
+    values: ['gelu', 'relu']
+  MODEL.PARAM.pre_norm:
+    values: [True, False]
   MODEL.PARAM.head_type:
     values: ['probabilistic']
   MODEL.PARAM.distribution_type:
