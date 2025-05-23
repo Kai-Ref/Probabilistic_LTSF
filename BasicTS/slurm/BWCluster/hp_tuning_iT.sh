@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH -p gpu_h100_il  # Use the dev_gpu_4_a100 partition with A100 GPUs dev_gpu_4
+#SBATCH -p gpu_a100_il  # Use the dev_gpu_4_a100 partition with A100 GPUs dev_gpu_4
 #SBATCH -n 1                   # Number of tasks (1 for single node)
-#SBATCH -t 120           # Time limit (10 minutes for debugging purposes)
+#SBATCH -t 240           # Time limit (10 minutes for debugging purposes)
 #SBATCH --mem=60000             # Memory request (adjust as needed)
 #SBATCH --gres=gpu:1           # Request 1 GPU (adjust if you need more)
 #SBATCH --cpus-per-task=16     # Number of CPUs per GPU (16 for A100)
@@ -23,9 +23,9 @@ MODEL_NAME="PatchTST"
 # SweepID='' # - 336
 # SweepID='' # - 720
 # -------------------------- IL 96
-SweepID='fd40u7me' # - 720 multivariate
+SweepID='bz7to3l3' # - 720 multivariate
 # SweepID='7hg7ll8o' # - 720 univariate 
-# SweepID='' # - 720 quantile 
+# SweepID='' # - 720 quantile
 
 # iTransformer
 # MODEL_NAME="iTransformer"

@@ -19,7 +19,7 @@ class DeepAR(nn.Module):
     """
 
     def __init__(self, cov_feat_size, embedding_size, hidden_size, num_layers, use_ts_id, 
-                id_feat_size=0, num_nodes=0, distribution_type="gaussian", quantiles=None,) -> None:
+                id_feat_size=0, num_nodes=0, distribution_type="gaussian", prob_args={}) -> None:
         """Init DeepAR.
 
         Args:
@@ -48,7 +48,7 @@ class DeepAR(nn.Module):
         # the likelihood function
         self.distribution_type = distribution_type
         self.quantiles = quantiles
-        self.prob_head = ProbabilisticHead(hidden_size, 1, distribution_type=self.distribution_type, quantiles=self.quantiles) #Gaussian(hidden_size, 1)
+        self.prob_head = ProbabilisticHead(hidden_size, 1, distribution_type=self.distribution_type, prob_args=prob_args) #Gaussian(hidden_size, 1)
 
     def _sample_from_head(self, head_output, hidden_output=None):
         """Sample from the probabilistic head based on distribution type"""

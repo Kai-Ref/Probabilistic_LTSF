@@ -356,12 +356,11 @@ class ImplicitQuantileHead(BaseDistribution):
     
     def sample(self, head_output, num_samples=1):
         """Select the 0.5 quantile (median) if available, else fallback to the midpoint."""
-        # if self.training:
-        #     return head_output[..., 0]  # Use the direct prediction during training
-        # else:
-        #     median_idx = len(self.quantiles) // 2 if self.quantiles else 0
-        #     return head_output[..., median_idx]
-        return NotImplementedError("Need to decide on a way to sample from IQN.")
+        if self.training:
+            return head_output[..., 0]  # Use the direct prediction during training
+        else:
+            median_idx =  self.quantiles.index(0.5) if 0.5 in self.quantiles else len(self.quantiles) // 2
+            return head_output[..., median_idx]
 
 class StudentTHead(GaussianHead):
     """Student's t-distribution for heavy-tailed data."""
