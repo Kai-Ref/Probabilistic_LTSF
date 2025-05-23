@@ -173,7 +173,7 @@ def quantile_loss(prediction: torch.Tensor, target: torch.Tensor, quantiles, nul
         # Reshape and expand quantiles without hardcoding
         quantiles = quantiles.view(1, 1, 1, num_quantiles).expand(batch_size, 1, time_steps, num_quantiles).to(prediction.device) # Shape: [64, 1, 7, num_quantiles]
     else:
-        quantiles = quantiles.unsqueeze(1).unsqueeze(-1)  # Shape: [64, 1, 7, 1]
+        quantiles = quantiles.unsqueeze(1).unsqueeze(-1)  # Shape: [64, 1, 7, 1]   
     errors = target - prediction  # Shape: [64, 96, 7, 1]
     loss = torch.max(quantiles * errors, (quantiles - 1) * errors)  # Shape: [64, 96, 7, 1]
     #loss = loss * mask  # Shape: [64, 96, 7, 1]

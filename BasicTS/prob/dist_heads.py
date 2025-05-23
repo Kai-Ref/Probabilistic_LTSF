@@ -329,6 +329,7 @@ class ImplicitQuantileHead(BaseDistribution):
         return predictions
 
     def forward(self, x):
+        # print(x.shape)
         batch_size = x.size(0)
         if self.training:
             u = torch.rand(batch_size, 1).to(x.device)  # [batch_size, 1] - One random quantile level per element
@@ -337,6 +338,7 @@ class ImplicitQuantileHead(BaseDistribution):
                 u = u.unsqueeze(-1)
                 batch_size, num_series, length = predictions.shape
                 u = u.expand(batch_size, num_series, 1)
+            # print(u.shape)
             return torch.cat([predictions, u], dim=-1).unsqueeze(-1)  # Append tau to output
         else:
             #u = self.quantiles.to(x.device).repeat(batch_size, 1)  # Fixed quantile levels for inference

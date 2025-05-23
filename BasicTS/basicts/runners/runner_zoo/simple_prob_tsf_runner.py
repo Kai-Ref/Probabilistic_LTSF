@@ -155,7 +155,7 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
         model_return = self.model(history_data=history_data, future_data=future_data_4_dec,
                                 batch_seen=iter_num, epoch=epoch, train=train)
 
-        if (model_return.shape[1] != length) and (self.distribution_type == 'i_quantile'):
+        if train and (self.distribution_type == 'i_quantile'):
             quantiles = model_return[:, -1:, :, :].squeeze()
             model_return = model_return[:, :-1, :, :]
 
@@ -281,7 +281,8 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
             metric_item = metric_func(**args)
         elif callable(metric_func):
             if ('quantile_loss' in str(metric_func)): # and ('quantiles' not in list(self.prob_args.keys())):
-                args['quantiles'] = self.quantiles
+                if 'quantiles' not in args.keys():# quantiles is potentially set if it is part of forward return, see i_quantile
+                    args['quantiles'] = self.quantiles
             if ('nll_loss' in str(metric_func)) or ('crps' in str(metric_func)):
                 args['distribution_type'] = self.distribution_type
                 args['prob_args'] = self.prob_args

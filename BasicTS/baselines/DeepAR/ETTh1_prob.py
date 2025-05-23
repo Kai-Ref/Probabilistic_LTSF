@@ -5,7 +5,7 @@ sys.path.append(os.path.abspath(__file__ + '/../../..'))
 from basicts.metrics import masked_mae, masked_mse, nll_loss, crps, Evaluator, quantile_loss
 from basicts.data import TimeSeriesForecastingDataset
 from basicts.runners import SimpleProbTimeSeriesForecastingRunner, SimpleTimeSeriesForecastingRunner
-from basicts.scaler import ZScoreScaler
+from basicts.scaler import ZScoreScaler, MinMaxScaler
 from basicts.utils import get_regular_settings
 
 from .arch import DeepAR
@@ -33,8 +33,8 @@ MODEL_PARAM = {
     'id_feat_size': 32,
     'num_nodes': 7,
     # "head_type": "probabilistic", #-> for DeepAR there are only probabilistic head types!
-    "distribution_type": "flow", 
-    "quantiles": [],
+    "distribution_type": "gaussian", 
+    "prob_args": {},
     }
 NUM_EPOCHS = 100
 

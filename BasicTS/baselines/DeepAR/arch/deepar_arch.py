@@ -47,7 +47,7 @@ class DeepAR(nn.Module):
         self.encoder = nn.LSTM(embedding_size+cov_feat_size+id_feat_size, hidden_size, num_layers, bias=True, batch_first=True)
         # the likelihood function
         self.distribution_type = distribution_type
-        self.quantiles = quantiles
+        self.quantiles = prob_args['quantiles'] if 'quantiles' in prob_args.keys() else None
         self.prob_head = ProbabilisticHead(hidden_size, 1, distribution_type=self.distribution_type, prob_args=prob_args) #Gaussian(hidden_size, 1)
 
     def _sample_from_head(self, head_output, hidden_output=None):
@@ -95,7 +95,7 @@ class DeepAR(nn.Module):
             train (bool): is training or not.
         """
         history_next = None
-        samples = []
+        # samples = []
         dist_params = []
         len_in, len_out = history_data.shape[1], future_data.shape[1]
         B, _, N, C = history_data.shape
@@ -118,19 +118,38 @@ class DeepAR(nn.Module):
             _, (h, c) = self.encoder(encoder_input) if t == 1 else self.encoder(encoder_input, (h, c))
 
             # distribution proj
-            head_output = self.prob_head(F.relu(h[-1, :, :]))
-            dist_params.append(head_output.view(B, N, -1).unsqueeze(1))
-            sample = self.prob_head.sample(head_output) #self._sample_from_head(head_output, None)
-            history_next = sample.view(B, N).view(B, 1, N, 1)
+            if self.distribution_type in ["i_quantile"]: # since we need the batch size shape to construct the uniform quantile levels this is a bit ugly
+                head_output = self.prob_head(F.relu(h[-1, :, :].view(B, N, -1))).reshape(B * N, -1)
+                print(head_output[..., 0].view(B, N, -1).unsqueeze(1).shape)
+                print(head_output[..., 1].view(B, N, -1)[:, 0:1, :].unsqueeze(1).shape)
+                
+                dist_params.append(torch.cat([head_output[..., 0].view(B, N, -1).unsqueeze(1), head_output[..., 1].view(B, N, -1)[:, 0:1, :].unsqueeze(1)], dim=1))
+                # quantiles = head_output[..., 1].view(B, N, -1)[:, 0, :]
+                # print(quantiles)
+                # print(quantiles.shape)
+                # head_output = torch.cat([], dim=1)
+            else: 
+                head_output = self.prob_head(F.relu(h[-1, :, :]))
+                dist_params.append(head_output.view(B, N, -1).unsqueeze(1))
+            if (t > len_in and not train): # not in the decoding stage when inferecing
+                sample = self.prob_head.sample(head_output) #self._sample_from_head(head_output, None)
+                print(sample.shape)
+                print(sample)
+                print(B, N)
+                history_next = sample.view(B, N).view(B, 1, N, 1)
             # print(head_output.view(B, N, -1).unsqueeze(1).shape)
             #history_next = self.gaussian_sample(mu, sigma).view(B, N).view(B, 1, N, 1)
             #mus.append(mu.view(B, N, 1).unsqueeze(1))
             #sigmas.append(sigma.view(B, N, 1).unsqueeze(1))
-            samples.append(history_next)
+            # samples.append(history_next)
             assert not torch.isnan(history_next).any()
 
-        samples = torch.concat(samples, dim=1)
+        # samples = torch.concat(samples, dim=1)
         #TODO also try to return the full prediction horizon and optimize it on that
         params = torch.concat(dist_params, dim=1)[:, -len_out:, :, :]
+        # print(params[:, :, :, 0])
+        # print(params[:, :, :, 1])
+        print(params.shape)
+        print(tut)
         #reals = input_feat_full[:, -params.shape[1]:, :, :]
         return params # {"prediction": params, }#"target": reals,}# "mus": mus, "sigmas": sigmas}
