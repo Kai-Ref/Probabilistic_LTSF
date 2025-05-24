@@ -72,7 +72,8 @@ parameters:
   MODEL.PARAM.head_type:
     values: ['probabilistic']
   MODEL.PARAM.distribution_type:
-    values: ['quantile', "i_quantile"] #['gaussian', 'laplace', 'student_t'] #, 'flow'] # flow 
+    # values: ['quantile', "i_quantile"] #['gaussian', 'laplace', 'student_t'] #, 'flow'] # flow 
+    values: ['i_quantile']
     # values: ['m_lr_gaussian']
   MODEL.PARAM.prob_args.quantiles:
     values: [[0.005, 0.025, 0.165, 0.25, 0.5, 0.75, 0.835, 0.975, 0.995]]

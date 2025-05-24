@@ -17,7 +17,7 @@ from .arch import DeepAR
 DATA_NAME = 'ETTh1'  # Dataset name
 regular_settings = get_regular_settings(DATA_NAME)
 INPUT_LEN = 96 #regular_settings['INPUT_LEN']  # Length of input sequence
-OUTPUT_LEN = 96 #regular_settings['OUTPUT_LEN']  # Length of output sequence
+OUTPUT_LEN = 720 #regular_settings['OUTPUT_LEN']  # Length of output sequence
 TRAIN_VAL_TEST_RATIO = regular_settings['TRAIN_VAL_TEST_RATIO']  # Train/Validation/Test split ratios
 NORM_EACH_CHANNEL = regular_settings['NORM_EACH_CHANNEL'] # Whether to normalize each channel of the data
 RESCALE = regular_settings['RESCALE'] # Whether to rescale the data
@@ -114,12 +114,13 @@ CFG.TRAIN.OPTIM = EasyDict()
 CFG.TRAIN.OPTIM.TYPE = "Adam"
 CFG.TRAIN.OPTIM.PARAM = {
     'lr':0.003,
+    "weight_decay": 0.0001,
 }
 # Learning rate scheduler settings
 CFG.TRAIN.LR_SCHEDULER = EasyDict()
 CFG.TRAIN.LR_SCHEDULER.TYPE = "MultiStepLR"
 CFG.TRAIN.LR_SCHEDULER.PARAM = {
-    "milestones": [1, 25],
+    "milestones": [5, 25],
     "gamma": 0.5
 }
 CFG.TRAIN.CLIP_GRAD_PARAM = {
