@@ -32,8 +32,8 @@ class ProbabilisticHead(nn.Module):
             raise ValueError(f"Unsupported distribution type: {distribution_type}")
         self.head = self.DISTRIBUTIONS[distribution_type](input_dim, output_dim, prob_args=prob_args)
 
-    def forward(self, x):
-        return self.head(x)
+    def forward(self, x, **kwargs):
+        return self.head(x, **kwargs)
     
     def __get_dist__(self, prediction):
         return self.head.__get_dist__(prediction)

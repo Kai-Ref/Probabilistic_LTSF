@@ -156,7 +156,7 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
                                 batch_seen=iter_num, epoch=epoch, train=train)
 
         if train and (self.distribution_type == 'i_quantile'):
-            quantiles = model_return[:, -1:, :, :].squeeze()
+            quantiles = model_return[:, -1:, :, :].squeeze(3).squeeze(1) # creates shape batch size x series
             model_return = model_return[:, :-1, :, :]
 
         # Parse model return

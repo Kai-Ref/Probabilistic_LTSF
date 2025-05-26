@@ -302,7 +302,7 @@ class ImplicitQuantileHead(BaseDistribution):
         self.decoding = prob_args['decoding'] # either hadamard or concat
         self.cos_embedding_dim = prob_args['cos_embedding_dim']
         if self.decoding == "hadamard":
-            self.quantile_embed_dim = 96 #prob_args['quantile_embed_dim']
+            self.quantile_embed_dim = prob_args['fixed_qe']
             self.qr_head = nn.Linear(self.quantile_embed_dim, output_dim)
         else:
             self.quantile_embed_dim = prob_args['quantile_embed_dim'] 
@@ -310,6 +310,7 @@ class ImplicitQuantileHead(BaseDistribution):
         self.quantile_embedding = nn.Linear(self.cos_embedding_dim, self.quantile_embed_dim)
         self.activation = nn.ReLU()
         self.quantiles = prob_args['quantiles'] # only needed in eval mode ->e.g. val/test quantile loss
+        self.u = None
 
     def _make_pred(self, u, x):
         # IQN Cosine Embedding for Quantile Processing
@@ -318,7 +319,7 @@ class ImplicitQuantileHead(BaseDistribution):
         phi_u = self.activation(self.quantile_embedding(cos_features))  # Learnable transformation
         if len(x.shape)<3:# this is the case when individual is used
             x = x.unsqueeze(dim=1) # shape: [64, 1, 60]
-        phi_u = phi_u.unsqueeze(1).expand(-1, x.shape[1], -1)  # Shape: [64, x.shape[1], 60]
+        phi_u = phi_u.unsqueeze(1).expand(-1, x.shape[1], -1)  # Shape: [64, x.shape[1], embedding dim]
 
         if self.decoding == "concat": # Concatenate quantile representation to input x
             x = torch.cat([x, phi_u], dim=-1) # [batch_size, output_dim]
@@ -328,11 +329,15 @@ class ImplicitQuantileHead(BaseDistribution):
         predictions = self.qr_head(x).squeeze(1)  # [batch_size, output_dim]
         return predictions
 
-    def forward(self, x):
-        # print(x.shape)
+    def forward(self, x, resample_u=False):
         batch_size = x.size(0)
         if self.training:
-            u = torch.rand(batch_size, 1).to(x.device)  # [batch_size, 1] - One random quantile level per element
+            if (self.output_dim == 1) and resample_u:
+                if (self.u is None):
+                    self.u = torch.rand(batch_size, 1).to(x.device)  # [batch_size, 1] - One random quantile level per element
+                u = self.u[:batch_size]
+            else:                    
+                u = torch.rand(batch_size, 1).to(x.device)  # [batch_size, 1] - One random quantile level per element
             predictions = self._make_pred(u, x)
             if predictions.dim() != u.dim():
                 u = u.unsqueeze(-1)

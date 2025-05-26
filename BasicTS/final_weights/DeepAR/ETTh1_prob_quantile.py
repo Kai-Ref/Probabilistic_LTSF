@@ -2,56 +2,45 @@ import os
 import sys
 from easydict import EasyDict
 sys.path.append(os.path.abspath(__file__ + '/../../..'))
-
-from basicts.metrics import masked_mae, masked_mse, nll_loss, crps, Evaluator, quantile_loss, empirical_crps
+from basicts.metrics import masked_mae, masked_mse, nll_loss, crps, Evaluator, quantile_loss
 from basicts.data import TimeSeriesForecastingDataset
 from basicts.runners import SimpleProbTimeSeriesForecastingRunner, SimpleTimeSeriesForecastingRunner
 from basicts.scaler import ZScoreScaler, MinMaxScaler
 from basicts.utils import get_regular_settings
 
-from .arch import PatchTST
+from .arch import DeepAR
+# from .runner import DeepARRunner
+# from .loss import gaussian_loss
 
 ############################## Hot Parameters ##############################
 # Dataset & Metrics configuration
 DATA_NAME = 'ETTh1'  # Dataset name
 regular_settings = get_regular_settings(DATA_NAME)
-INPUT_LEN = 96 # regular_settings['INPUT_LEN']  # Length of input sequence
+INPUT_LEN = 96 #regular_settings['INPUT_LEN']  # Length of input sequence
 OUTPUT_LEN = 720 #regular_settings['OUTPUT_LEN']  # Length of output sequence
-TRAIN_VAL_TEST_RATIO = regular_settings['TRAIN_VAL_TEST_RATIO']  # Train/Validation/Test split ratios
-NORM_EACH_CHANNEL = True #regular_settings['NORM_EACH_CHANNEL'] # Whether to normalize each channel of the data
-RESCALE = True #regular_settings['RESCALE'] # Whether to rescale the data
+TRAIN_VAL_TEST_RATIO = #regular_settings['TRAIN_VAL_TEST_RATIO']  # Train/Validation/Test split ratios
+NORM_EACH_CHANNEL =  # Whether to normalize each channel of the data
+RESCALE = True # Whether to rescale the data
 NULL_VAL = regular_settings['NULL_VAL'] # Null value in the data
 # Model architecture and parameters
-MODEL_ARCH = PatchTST
-NUM_NODES = 7
+MODEL_ARCH = DeepAR
 MODEL_PARAM = {
-    "enc_in": NUM_NODES,                        # num nodes
-    "seq_len": INPUT_LEN,           # input sequence length
-    "pred_len": OUTPUT_LEN,         # prediction sequence length
-    "e_layers": 2,                              # num of encoder layers
-    "n_heads": 2,
-    "d_model": 32,
-    "d_ff": 32,
-    "dropout": 0.3,
-    "fc_dropout": 0.3,
-    "head_dropout": 0.0,
-    "patch_len": 32,
-    "stride": 64,
-    "individual": 1,                            # individual head; True 1 False 0
-    "padding_patch": "end",                     # None: None; end: padding on the end
-    "revin": 1,                                 # RevIN; True 1 False 0
-    "affine": 1,                                # RevIN-affine; True 1 False 0
-    "subtract_last": 0,                         # 0: subtract mean; 1: subtract last
-    "decomposition": 0,                         # decomposition; True 1 False 0
-    "kernel_size": 25,                          # decomposition-kernel
-    "head_type": "probabilistic",
+    'cov_feat_size' : 2,
+    'embedding_size' : 32,
+    'hidden_size' : 48,
+    'num_layers': 3,
+    'use_ts_id'   : False,
+    'id_feat_size': 32,
+    'num_nodes': 7,
+    # "head_type": "probabilistic", #-> for DeepAR there are only probabilistic head types!
+    # "head_type": "probabilistic",
     "distribution_type": "i_quantile",
     "prob_args":{"quantiles": [0.005, 0.025, 0.165, 0.25, 0.5, 0.75, 0.835, 0.975, 0.995], #[0.1, 0.25, 0.5, 0.75, 0.9],
                 "num_layers": 2, 
-                "quantile_embed_dim": 64, #64, -> needs to be fixed 
+                "quantile_embed_dim": 64, 
                 "cos_embedding_dim": 128,
                 "decoding": "hadamard",
-                "fixed_qe": 96, # used for hadamard since it needs the right dimension
+                "fixed_qe": 48, # used for hadamard since it needs the right dimension
                 # "rank":13,
                 # "base_distribution": "laplace",
                 # "base_prob_args": {"rank":7, "quantiles": [],},
@@ -59,7 +48,7 @@ MODEL_PARAM = {
                 # "flow_hidden_dim": 16,
                 # "flow_type": "sigmoidal", # sigmoidal, rectified, affine
                 }, 
-}
+    }
 NUM_EPOCHS = 100
 
 ############################## General Configuration ##############################
@@ -68,7 +57,7 @@ CFG = EasyDict()
 CFG.DESCRIPTION = 'An Example Config'
 CFG.GPU_NUM = 1 # Number of GPUs to use (0 for CPU mode)
 # Runner
-CFG.RUNNER = SimpleProbTimeSeriesForecastingRunner
+CFG.RUNNER = SimpleProbTimeSeriesForecastingRunner #DeepARRunner
 
 CFG.USE_WANDB = False
 
@@ -88,7 +77,7 @@ CFG.DATASET.PARAM = EasyDict({
 ############################## Scaler Configuration ##############################
 CFG.SCALER = EasyDict()
 #Scaler settings
-CFG.SCALER.TYPE = ZScoreScaler # Scaler class, None MinMaxScaler ZScoreScaler
+CFG.SCALER.TYPE = MinMaxScaler # Scaler class, None MinMaxScaler ZScoreScaler
 CFG.SCALER.PARAM = EasyDict({
    'dataset_name': DATA_NAME,
    'train_ratio': TRAIN_VAL_TEST_RATIO[0],
@@ -102,7 +91,7 @@ CFG.MODEL = EasyDict()
 CFG.MODEL.NAME = MODEL_ARCH.__name__
 CFG.MODEL.ARCH = MODEL_ARCH
 CFG.MODEL.PARAM = MODEL_PARAM
-CFG.MODEL.FORWARD_FEATURES = [0]
+CFG.MODEL.FORWARD_FEATURES = [0, 1, 2]
 CFG.MODEL.TARGET_FEATURES = [0]
 
 ############################## Metrics Configuration ##############################
@@ -143,7 +132,7 @@ CFG.TRAIN.LOSS = quantile_loss
 CFG.TRAIN.OPTIM = EasyDict()
 CFG.TRAIN.OPTIM.TYPE = "Adam"
 CFG.TRAIN.OPTIM.PARAM = {
-    "lr": 0.0002,
+    'lr':0.003,
     "weight_decay": 0.0001,
 }
 # Learning rate scheduler settings
