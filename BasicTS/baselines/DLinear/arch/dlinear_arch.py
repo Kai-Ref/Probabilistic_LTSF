@@ -52,6 +52,7 @@ class DLinear(nn.Module):
         kernel_size = 25
         self.decompsition = series_decomp(kernel_size)
         self.individual = model_args["individual"]
+        self.prob_individual = model_args["prob_individual"]
         self.channels = model_args["enc_in"]
 
         self.head_type = model_args['head_type']
@@ -61,27 +62,39 @@ class DLinear(nn.Module):
             self.Linear_Trend = nn.ModuleList()
 
             if self.head_type == 'probabilistic':
-                distribution_type = model_args['distribution_type']
-                quantiles = model_args['quantiles']
+                self.distribution_type = model_args['distribution_type']
+                prob_args = model_args['prob_args']
                 self.Heads = nn.ModuleList()
 
             for i in range(self.channels):
-                self.Linear_Seasonal.append(
-                    nn.Linear(self.seq_len, self.pred_len))
-                self.Linear_Trend.append(
-                    nn.Linear(self.seq_len, self.pred_len))
-                if self.head_type == 'probabilistic':
-                    self.Heads.append(
-                    ProbabilisticHead(self.pred_len, self.pred_len, distribution_type=distribution_type, quantiles=quantiles))
-
+                if not self.prob_individual:
+                    self.Linear_Seasonal.append(
+                        nn.Linear(self.seq_len, self.pred_len))
+                    self.Linear_Trend.append(
+                        nn.Linear(self.seq_len, self.pred_len))
+                    if self.head_type == 'probabilistic':
+                        self.Heads.append(ProbabilisticHead(self.pred_len, self.pred_len, distribution_type=self.distribution_type, prob_args=prob_args))
+                else:      
+                    assert self.head_type == 'probabilistic'              
+                    self.Linear_Seasonal.append(
+                        ProbabilisticHead(self.seq_len, self.pred_len, distribution_type=self.distribution_type, prob_args=prob_args))
+                    self.Linear_Trend.append(
+                        ProbabilisticHead(self.seq_len, self.pred_len, distribution_type=self.distribution_type, prob_args=prob_args))
         else:
-            self.Linear_Seasonal = nn.Linear(self.seq_len, self.pred_len)
-            self.Linear_Trend = nn.Linear(self.seq_len, self.pred_len)
-            if self.head_type == 'probabilistic':
-                distribution_type = model_args['distribution_type']
-                quantiles = model_args['quantiles']
-                self.head = ProbabilisticHead(self.pred_len, self.pred_len, distribution_type=distribution_type, quantiles=quantiles)
-        
+            if not self.prob_individual:
+                self.Linear_Seasonal = nn.Linear(self.seq_len, self.pred_len)
+                self.Linear_Trend = nn.Linear(self.seq_len, self.pred_len)
+                if self.head_type == 'probabilistic':
+                    self.distribution_type = model_args['distribution_type']
+                    prob_args = model_args['prob_args']
+                    self.head = ProbabilisticHead(self.pred_len, self.pred_len, distribution_type=self.distribution_type, prob_args=prob_args)
+            else:
+                assert self.head_type == 'probabilistic'
+                self.distribution_type = model_args['distribution_type']
+                prob_args = model_args['prob_args']
+                self.Linear_Seasonal = ProbabilisticHead(self.seq_len, self.pred_len, distribution_type=self.distribution_type, prob_args=prob_args)
+                self.Linear_Trend = ProbabilisticHead(self.seq_len, self.pred_len, distribution_type=self.distribution_type, prob_args=prob_args)
+                # self.head = ProbabilisticHead(self.pred_len, self.pred_len, distribution_type=distribution_type, prob_args=prob_args)
 
     def forward(self, history_data: torch.Tensor, future_data: torch.Tensor, batch_seen: int, epoch: int, train: bool, **kwargs) -> torch.Tensor:
         """Feed forward of DLinear.
@@ -99,31 +112,37 @@ class DLinear(nn.Module):
         seasonal_init, trend_init = seasonal_init.permute(
             0, 2, 1), trend_init.permute(0, 2, 1)
         if self.individual:
-            seasonal_output = torch.zeros([seasonal_init.size(0), seasonal_init.size(
-                1), self.pred_len], dtype=seasonal_init.dtype).to(seasonal_init.device)
-            trend_output = torch.zeros([trend_init.size(0), trend_init.size(
-                1), self.pred_len], dtype=trend_init.dtype).to(trend_init.device)
+            seasonal_output = [] #torch.zeros([seasonal_init.size(0), seasonal_init.size(1), self.pred_len], dtype=seasonal_init.dtype).to(seasonal_init.device)
+            trend_output = [] # torch.zeros([trend_init.size(0), trend_init.size(1), self.pred_len], dtype=trend_init.dtype).to(trend_init.device)
             for i in range(self.channels):
-                seasonal_output[:, i, :] = self.Linear_Seasonal[i](
-                    seasonal_init[:, i, :])
-                trend_output[:, i, :] = self.Linear_Trend[i](
-                    trend_init[:, i, :])
+                # seasonal_output[:, i, :] = self.Linear_Seasonal[i](
+                #     seasonal_init[:, i, :])
+                # trend_output[:, i, :] = self.Linear_Trend[i](
+                #     trend_init[:, i, :])
+                seasonal_output.append(self.Linear_Seasonal[i](seasonal_init[:, i, :]))
+                trend_output.append(self.Linear_Trend[i](trend_init[:, i, :]))
+            seasonal_output = torch.stack(seasonal_output, dim=1)
+            trend_output = torch.stack(trend_output, dim=1)
         else:
             seasonal_output = self.Linear_Seasonal(seasonal_init)
             trend_output = self.Linear_Trend(trend_init)
 
         prediction = seasonal_output + trend_output
         # after the normal calulation append the probabilistic head
-        if self.head_type == 'probabilistic':
+        if (self.head_type == 'probabilistic') and (not self.prob_individual):
             # the individual heads also have to be modelled differently
             if self.individual:
                 predictions = []
                 for i in range(self.channels):
-                    out = self.Heads[i](prediction[:, i, :]).unsqueeze(1)
+                    out = self.Heads[i](prediction[:, i, :])
+                    if self.distribution_type not in ['m_lrgaussian']:
+                        out = out.unsqueeze(1)
                     predictions.append(out)
                 prediction = torch.cat(predictions, dim=1)
             else: 
                 prediction = self.head(prediction)
+            return prediction.permute(0, 2, 1, 3) # [B, L, N, Params]
+        elif self.prob_individual:
             return prediction.permute(0, 2, 1, 3) # [B, L, N, Params]
         else: 
             return prediction.permute(0, 2, 1).unsqueeze(-1)  # [B, L, N, 1]

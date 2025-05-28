@@ -9,7 +9,7 @@ from basicts.runners import SimpleProbTimeSeriesForecastingRunner, SimpleTimeSer
 from basicts.scaler import ZScoreScaler, MinMaxScaler
 from basicts.utils import get_regular_settings
 
-from baselines.PatchTST.arch import PatchTST
+from .arch import PatchTST
 
 ############################## Hot Parameters ##############################
 # Dataset & Metrics configuration
@@ -18,8 +18,8 @@ regular_settings = get_regular_settings(DATA_NAME)
 INPUT_LEN = 96 # regular_settings['INPUT_LEN']  # Length of input sequence
 OUTPUT_LEN = 720 #regular_settings['OUTPUT_LEN']  # Length of output sequence
 TRAIN_VAL_TEST_RATIO = regular_settings['TRAIN_VAL_TEST_RATIO']  # Train/Validation/Test split ratios
-NORM_EACH_CHANNEL = regular_settings['NORM_EACH_CHANNEL'] # Whether to normalize each channel of the data
-RESCALE = regular_settings['RESCALE'] # Whether to rescale the data
+NORM_EACH_CHANNEL = True #regular_settings['NORM_EACH_CHANNEL'] # Whether to normalize each channel of the data
+RESCALE = True #regular_settings['RESCALE'] # Whether to rescale the data
 NULL_VAL = regular_settings['NULL_VAL'] # Null value in the data
 # Model architecture and parameters
 MODEL_ARCH = PatchTST
@@ -41,18 +41,23 @@ MODEL_PARAM = {
     "padding_patch": "end",                     # None: None; end: padding on the end
     "revin": 1,                                 # RevIN; True 1 False 0
     "affine": 1,                                # RevIN-affine; True 1 False 0
-    "subtract_last": 1,                         # 0: subtract mean; 1: subtract last
-    "decomposition": 1,                         # decomposition; True 1 False 0
+    "subtract_last": 0,                         # 0: subtract mean; 1: subtract last
+    "decomposition": 0,                         # decomposition; True 1 False 0
     "kernel_size": 25,                          # decomposition-kernel
     "head_type": "probabilistic",
-    "distribution_type": "gaussian",
-    "prob_args":{#"quantiles": [],#[0.1, 0.25, 0.5, 0.75, 0.9],
-                "rank":13,
-                "base_distribution": "laplace",
-                "base_prob_args": {"rank":7, "quantiles": [],},
-                "n_flows": 2,
-                "flow_hidden_dim": 16,
-                "flow_type": "sigmoidal", # sigmoidal, rectified, affine
+    "distribution_type": "i_quantile",
+    "prob_args":{"quantiles": [0.005, 0.025, 0.165, 0.25, 0.5, 0.75, 0.835, 0.975, 0.995], #[0.1, 0.25, 0.5, 0.75, 0.9],
+                "num_layers": 2, 
+                "quantile_embed_dim": 64, #64, -> needs to be fixed 
+                "cos_embedding_dim": 128,
+                "decoding": "hadamard",
+                "fixed_qe": 96, # used for hadamard since it needs the right dimension
+                # "rank":13,
+                # "base_distribution": "laplace",
+                # "base_prob_args": {"rank":7, "quantiles": [],},
+                # "n_flows": 2,
+                # "flow_hidden_dim": 16,
+                # "flow_type": "sigmoidal", # sigmoidal, rectified, affine
                 }, 
 }
 NUM_EPOCHS = 100
@@ -109,18 +114,18 @@ all_metrics = ["MSE", "abs_error", "abs_target_sum", "abs_target_mean",
                                 "mean_absolute_QuantileLoss", "CRPS", "MAE_Coverage", "NLL", 
                                 #"VS", "ES"
                                 ]
-CFG.METRICS.FUNCS = EasyDict({'NLL': nll_loss,
+CFG.METRICS.FUNCS = EasyDict({#'NLL': nll_loss,
                             #'MAE': masked_mae,
                             #'MSE': masked_mse,
-                            'CRPS': crps,
+                            # 'CRPS': crps,
                             #'CRPS_E': empirical_crps,
-                            #'QL': quantile_loss,
+                            'QL': quantile_loss,
                             #'Evaluator': Evaluator(distribution_type=MODEL_PARAM['distribution_type'], 
                             #                        quantiles=MODEL_PARAM['quantiles']),
                             # 'Val_Evaluator': Evaluator(distribution_type=MODEL_PARAM['distribution_type'], metrics = all_metrics,
                             #                         quantiles=MODEL_PARAM['quantiles']),  # only use the evaluator during validation/testing iters
                             })
-CFG.METRICS.TARGET = 'NLL'
+CFG.METRICS.TARGET = 'QL'
 CFG.METRICS.NULL_VAL = NULL_VAL
 
 ############################## Training Configuration ##############################
@@ -129,11 +134,11 @@ CFG.TRAIN.RESUME_TRAINING = False
 CFG.TRAIN.EARLY_STOPPING_PATIENCE = 5
 CFG.TRAIN.NUM_EPOCHS = NUM_EPOCHS
 CFG.TRAIN.CKPT_SAVE_DIR = os.path.join(
-    '/pfs/data6/home/ma/ma_ma/ma_kreffert/Probabilistic_LTSF/model_weights',
+    'checkpoints',
     f'{MODEL_PARAM["distribution_type"]}_{MODEL_ARCH.__name__}',
     '_'.join([DATA_NAME, str(CFG.TRAIN.NUM_EPOCHS), str(INPUT_LEN), str(OUTPUT_LEN)])
 )
-CFG.TRAIN.LOSS = nll_loss
+CFG.TRAIN.LOSS = quantile_loss
 # Optimizer settings
 CFG.TRAIN.OPTIM = EasyDict()
 CFG.TRAIN.OPTIM.TYPE = "Adam"
