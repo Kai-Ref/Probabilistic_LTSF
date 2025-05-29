@@ -96,3 +96,5 @@ wandb/
 *.out
 *.pt
 tensorboard/
+*.tar
+extracted_files/

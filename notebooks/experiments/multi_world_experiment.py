@@ -145,6 +145,7 @@ class ForecastModels:
             self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
             self.fn = nn.ReLU()
             self.out = nn.Linear(hidden_size, 2)  # mean and log_sigma
+            self.device = "cuda" if torch.cuda.is_available() else 'cpu'
             
         def forward(self, x, hidden=None):
             # x: [batch_size, seq_len, input_size]
@@ -178,7 +179,7 @@ class ForecastModels:
                 sigmas = torch.zeros(num_samples, batch_size, steps)
                 for sample in range(num_samples):
                     # Start with the initial sequence
-                    current_input = initial_sequence.to('cuda')
+                    current_input = initial_sequence.to(self.device)
                     hidden = None
                     for t in range(steps):
                         # Get prediction for current step
@@ -946,7 +947,8 @@ class MultiWorldExperiment:
                 "nll": nll_gt,
                 "nll_mean": nll_gt.mean(),
                 "entropy": ground_truth_entropy,
-                "entropy_mean": ground_truth_entropy.mean()
+                "entropy_mean": ground_truth_entropy.mean(),
+                "samples":self.samples,
             }
         }
         
