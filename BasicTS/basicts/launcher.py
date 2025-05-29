@@ -299,6 +299,32 @@ def fill_dependencies(override_config, model_name='PatchTST', data_name='ETTh1')
             'RESCALE': ['SCALER.PARAM.rescale'],
             # 'NULL_VAL': ['METRICS.NULL_VAL'],
         }
+    elif model_name == 'DLinear':
+        dependency_dict = {
+            # Core parameters and their dependencies
+            'DATA_NAME': [
+                'DATASET.NAME',
+                'DATASET.PARAM.dataset_name',
+                'SCALER.PARAM.dataset_name'
+            ],
+            'INPUT_LEN': [
+                'DATASET.PARAM.input_len',
+                'MODEL.PARAM.seq_len',
+            ],
+            'OUTPUT_LEN': [
+                'DATASET.PARAM.output_len',
+                'MODEL.PARAM.pred_len',
+            ],
+            # 'TRAIN_VAL_TEST_RATIO': [
+            #     'DATASET.PARAM.train_val_test_ratio',
+            #     'SCALER.PARAM.train_ratio'
+            # ],
+            # 'NUM_NODES': ['MODEL.PARAM.enc_in'],
+            'NUM_EPOCHS': ['TRAIN.NUM_EPOCHS'],
+            'NORM_EACH_CHANNEL': ['SCALER.PARAM.norm_each_channel'],
+            'RESCALE': ['SCALER.PARAM.rescale'],
+            # 'NULL_VAL': ['METRICS.NULL_VAL'],
+        }
     else:
         raise ValueError(f"Unsupported model: {model_name}")
     
