@@ -135,7 +135,7 @@ class DLinear(nn.Module):
                 predictions = []
                 for i in range(self.channels):
                     out = self.Heads[i](prediction[:, i, :])
-                    if self.distribution_type not in ['m_lrgaussian']:
+                    if self.distribution_type not in ['m_lr_gaussian']: #-> maybe needed for Etth1
                         out = out.unsqueeze(1)
                     predictions.append(out)
                 prediction = torch.cat(predictions, dim=1)

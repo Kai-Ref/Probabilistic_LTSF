@@ -16,33 +16,18 @@ conda activate BasicTS
 
 DATASET_NAME="ETTh1_prob"
 # PatchTST
-MODEL_NAME="PatchTST"
-# regular settings - 336
-# SweepID='' # -96 -> maybe have to do that again because Scaler/Filler params did not adjust?
-# SweepID='' # - 192
-# SweepID='' # - 336
-# SweepID='' # - 720
-# -------------------------- IL 96
-SweepID='bz7to3l3' # - 720 multivariate
-# SweepID='7hg7ll8o' # - 720 univariate 
-# SweepID='' # - 720 quantile
+# MODEL_NAME="PatchTST"
 
 # iTransformer
 # MODEL_NAME="iTransformer"
-# # regular settings - 336
-# SweepID='' # - 96
-# SweepID='' # - 192
-# SweepID='' # - 336
-# SweepID='' # - 720
 
 
 # DeepAR
 # MODEL_NAME="DeepAR"
-# # regular settings - 96
-# SweepID='1ggq3wmn' # - 96
-# SweepID='' # - 192
-# SweepID='' # - 336
-# SweepID='sskubw3c' # - 720
+
+MODEL_NAME="DLinear"
+SweepID="dsgresbt" #- multivariate 720
+
 
 # python ~/Probabilistic_LTSF/BasicTS/experiments/hp_tuning.py -c baselines/${MODEL_NAME}/${DATASET_NAME}.py -s /home/ma/ma_ma/ma_kreffert/Probabilistic_LTSF/BasicTS/hp_tuning/${MODEL_NAME}.yaml --gpus '0'
 python ~/Probabilistic_LTSF/BasicTS/experiments/hp_tuning.py -c baselines/${MODEL_NAME}/${DATASET_NAME}.py -s ${SweepID} --gpus '0'
