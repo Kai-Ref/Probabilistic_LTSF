@@ -14,9 +14,9 @@ from .arch import DLinear
 
 ############################## Hot Parameters ##############################
 # Dataset & Metrics configuration
-DATA_NAME = 'ETTh1'  # Dataset name
+DATA_NAME = 'ETTm1'  # Dataset name
 regular_settings = get_regular_settings(DATA_NAME)
-INPUT_LEN = 96 # regular_settings['INPUT_LEN']  # Length of input sequence
+INPUT_LEN = 96# regular_settings['INPUT_LEN']  # Length of input sequence
 OUTPUT_LEN = regular_settings['OUTPUT_LEN']  # Length of output sequence
 TRAIN_VAL_TEST_RATIO = regular_settings['TRAIN_VAL_TEST_RATIO']  # Train/Validation/Test split ratios
 NORM_EACH_CHANNEL = regular_settings['NORM_EACH_CHANNEL'] # Whether to normalize each channel of the data
@@ -30,14 +30,9 @@ MODEL_PARAM = {
     "individual": False,
     "enc_in": 7, 
     "head_type": "probabilistic",
-    "distribution_type": "i_quantile",
-    "prob_individual": False, 
-    "prob_args": {'quantiles': [0.005, 0.025, 0.165, 0.25, 0.5, 0.75, 0.835, 0.975, 0.995],
-                    "num_layers": 2, 
-                    "quantile_embed_dim": 64, 
-                    "cos_embedding_dim": 128,
-                    "decoding": "hadamard",
-                    "fixed_qe": 48, # used for hadamard since it needs the right dimension
+    "distribution_type": "m_lr_gaussian",
+    "prob_individual": True, 
+    "prob_args": {'rank': 7,
                     }, #[0.1, 0.25, 0.5, 0.75, 0.9],
 }
 NUM_EPOCHS = 100
@@ -94,18 +89,18 @@ all_metrics = ["MSE", "abs_error", "abs_target_sum", "abs_target_mean",
                                 "mean_absolute_QuantileLoss", "CRPS", "MAE_Coverage", "NLL", 
                                 #"VS", "ES"
                                 ]
-CFG.METRICS.FUNCS = EasyDict({#'NLL': nll_loss,
+CFG.METRICS.FUNCS = EasyDict({'NLL': nll_loss,
                             #'MAE': masked_mae,
                             #'MSE': masked_mse,
-                            # 'CRPS': crps,
+                            'CRPS': crps,
                             #'CRPS_E': empirical_crps,
-                            'QL': quantile_loss,
+                            #'QL': quantile_loss,
                             #'Evaluator': Evaluator(distribution_type=MODEL_PARAM['distribution_type'], 
                             #                        quantiles=MODEL_PARAM['quantiles']),
                             # 'Val_Evaluator': Evaluator(distribution_type=MODEL_PARAM['distribution_type'], metrics = all_metrics,
                             #                         quantiles=MODEL_PARAM['quantiles']),  # only use the evaluator during validation/testing iters
                             })
-CFG.METRICS.TARGET = 'QL'
+CFG.METRICS.TARGET = 'NLL'
 CFG.METRICS.NULL_VAL = NULL_VAL
 
 ############################## Training Configuration ##############################
@@ -118,7 +113,7 @@ CFG.TRAIN.CKPT_SAVE_DIR = os.path.join(
     f'{MODEL_PARAM["distribution_type"]}_{MODEL_ARCH.__name__}',
     '_'.join([DATA_NAME, str(CFG.TRAIN.NUM_EPOCHS), str(INPUT_LEN), str(OUTPUT_LEN)])
 )
-CFG.TRAIN.LOSS = quantile_loss
+CFG.TRAIN.LOSS = nll_loss
 # Optimizer settings
 CFG.TRAIN.OPTIM = EasyDict()
 CFG.TRAIN.OPTIM.TYPE = "Adam"

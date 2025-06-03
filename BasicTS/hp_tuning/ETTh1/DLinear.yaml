@@ -6,7 +6,7 @@ parameters:
   MODEL.NAME: 
     values: ['DLinear']
   DATA_NAME:
-    values: ['ETTm1']
+    values: ['ETTh1']
   OUTPUT_LEN:
     values: [720]
   RESCALE:

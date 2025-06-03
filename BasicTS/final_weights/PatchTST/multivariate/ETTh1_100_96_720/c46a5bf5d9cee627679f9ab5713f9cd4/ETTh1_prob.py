@@ -66,6 +66,19 @@ CFG.GPU_NUM = 1
 CFG.RUNNER = SimpleProbTimeSeriesForecastingRunner
 CFG.USE_WANDB = False
 
+############################## Environment Configuration ##############################
+
+CFG.ENV = EasyDict() # Environment settings. Default: None
+
+# GPU and random seed settings
+CFG.ENV.TF32 = False # Whether to use TensorFloat-32 in GPU. Default: False. See https://pytorch.org/docs/stable/notes/cuda.html#tf32-on-ampere.
+CFG.ENV.SEED = 45 # Random seed. Default: None
+CFG.ENV.DETERMINISTIC = True # Whether to set the random seed to get deterministic results. Default: False
+CFG.ENV.CUDNN = EasyDict()
+CFG.ENV.CUDNN.ENABLED = True # Whether to enable cuDNN. Default: True
+CFG.ENV.CUDNN.BENCHMARK = True# Whether to enable cuDNN benchmark. Default: True
+CFG.ENV.CUDNN.DETERMINISTIC = False # Whether to set cuDNN to deterministic mode. Default: False
+
 ############################## Dataset Configuration ##############################
 CFG.DATASET = EasyDict()
 CFG.DATASET.NAME = DATA_NAME
