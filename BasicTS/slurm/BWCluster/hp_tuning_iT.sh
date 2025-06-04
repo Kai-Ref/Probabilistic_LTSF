@@ -14,7 +14,7 @@ conda activate BasicTS
 # prediction length and input length
 # OUTPUT_LEN=100
 
-DATASET_NAME="ETTh1_prob"
+DATASET_NAME="ETTm1_prob"
 # PatchTST
 # MODEL_NAME="PatchTST"
 
@@ -23,14 +23,14 @@ DATASET_NAME="ETTh1_prob"
 
 
 # DeepAR
-# MODEL_NAME="DeepAR"
+MODEL_NAME="DeepAR"
 
-MODEL_NAME="DLinear"
-SweepID="dsgresbt" #- multivariate 720
+# MODEL_NAME="DLinear"
+# SweepID="dsgresbt" #- multivariate 720
 
 
-# python ~/Probabilistic_LTSF/BasicTS/experiments/hp_tuning.py -c baselines/${MODEL_NAME}/${DATASET_NAME}.py -s /home/ma/ma_ma/ma_kreffert/Probabilistic_LTSF/BasicTS/hp_tuning/${MODEL_NAME}.yaml --gpus '0'
-python ~/Probabilistic_LTSF/BasicTS/experiments/hp_tuning.py -c baselines/${MODEL_NAME}/${DATASET_NAME}.py -s ${SweepID} --gpus '0'
+python ~/Probabilistic_LTSF/BasicTS/experiments/hp_tuning.py -c baselines/${MODEL_NAME}/${DATASET_NAME}.py -s /home/ma/ma_ma/ma_kreffert/Probabilistic_LTSF/BasicTS/hp_tuning/${MODEL_NAME}.yaml --gpus '0'
+# python ~/Probabilistic_LTSF/BasicTS/experiments/hp_tuning.py -c baselines/${MODEL_NAME}/${DATASET_NAME}.py -s ${SweepID} --gpus '0'
 
 
 # python ~/Probabilistic_LTSF/BasicTS/experiments/hp_tuning.py -c baselines/PatchTST/ETTh1_prob.py -s '6mxvo502' --gpus '0, 1'

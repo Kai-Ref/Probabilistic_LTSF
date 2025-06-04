@@ -6,7 +6,7 @@ parameters:
   MODEL.NAME: 
     values: ['DeepAR']
   DATA_NAME:
-    values: ['ETTh1']
+    values: ['ETTm1']
   OUTPUT_LEN:
     values: [720]
   RESCALE:
@@ -32,21 +32,21 @@ parameters:
   MODEL.PARAM.num_nodes:
     values: [7]
   MODEL.PARAM.distribution_type:
-    # values: ['quantile', "i_quantile"] #['gaussian', 'laplace', 'student_t'] #, 'flow'] # flow 
-    values: ['i_quantile']
+    values: ['quantile'] #, "i_quantile"] #['gaussian', 'laplace', 'student_t'] #, 'flow'] # flow 
+    # values: ['i_quantile']
     # values: ['m_lr_gaussian']
   MODEL.PARAM.prob_args.quantiles:
     values: [[0.005, 0.025, 0.165, 0.25, 0.5, 0.75, 0.835, 0.975, 0.995]]
-  MODEL.PARAM.prob_args.num_layers:
-    values: [2, 3, 4, 5, 7, 10]
-  MODEL.PARAM.prob_args.quantile_embed_dim: # note this affects
-    values: [8, 16, 32, 64, 128]
-  MODEL.PARAM.prob_args.decoding:
-    values: ["concat", "hadamard"]
-  MODEL.PARAM.prob_args.cos_embedding_dim:
-    values: [8, 16, 32, 64, 128]
-  MODEL.PARAM.prob_args.fixed_qe:
-    values: [48]
+  # MODEL.PARAM.prob_args.num_layers:
+  #   values: [2, 3, 4, 5, 7, 10]
+  # MODEL.PARAM.prob_args.quantile_embed_dim: # note this affects
+  #   values: [8, 16, 32, 64, 128]
+  # MODEL.PARAM.prob_args.decoding:
+  #   values: ["concat", "hadamard"]
+  # MODEL.PARAM.prob_args.cos_embedding_dim:
+  #   values: [8, 16, 32, 64, 128]
+  # MODEL.PARAM.prob_args.fixed_qe:
+  #   values: [48]
     
   # Basic Params
   NUM_EPOCHS:

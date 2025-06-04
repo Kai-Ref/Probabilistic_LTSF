@@ -6,7 +6,7 @@ parameters:
   MODEL.NAME: 
     values: ['DeepAR']
   DATA_NAME:
-    values: ['ETTh1']
+    values: ['ETTm1']
   OUTPUT_LEN:
     values: [720]
   RESCALE:
