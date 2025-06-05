@@ -22,12 +22,13 @@ DATASET_NAME="ETTm1_prob"
 # PatchTST
 # MODEL_NAME="PatchTST"
 
-
 # iTransformer
 # MODEL_NAME="iTransformer"
 
+
 # DeepAR
 # MODEL_NAME="DeepAR"
+# SweepID="dax8rkzl" #- multivariate 720
 
 MODEL_NAME="DLinear"
 SweepID="dsgresbt" #- multivariate 720
