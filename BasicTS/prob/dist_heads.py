@@ -17,9 +17,22 @@ class BaseDistribution(nn.Module):
     def __get_dist__(self, prediction):
         raise NotImplementedError("Subclasses must implement __get_dist__ method.")
 
-    def sample(self, head_output, num_samples=1):
+    def sample(self, head_output, num_samples=1, random_state=None):
         """Sample from the probabilistic head output."""
-        return self.__get_dist__(head_output).rsample((num_samples,))
+        dist = self.__get_dist__(head_output)
+
+        if random_state is not None:
+            # Save RNG state to restore later
+            rng_state = torch.get_rng_state()
+            torch.manual_seed(random_state)
+
+        samples = dist.rsample((num_samples,))
+
+        if random_state is not None:
+            # Restore the original RNG state
+            torch.set_rng_state(rng_state)
+
+        return samples
 
 class MultivariateGaussianHead(BaseDistribution):
     def __init__(self, input_dim, output_dim, prob_args={}):
