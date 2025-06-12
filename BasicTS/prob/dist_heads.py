@@ -254,13 +254,23 @@ class LowRankMultivariateGaussianHead(BaseDistribution):
             
         return distributions
         
-    def sample(self, head_output, num_samples=1):
+    def sample(self, head_output, num_samples=1, random_state=None):
         """Since slightly different behavior overwrite the sampling function."""
         batch_size, output_dim, num_series, _ = head_output.shape
         samples = torch.zeros(num_samples, batch_size, output_dim, num_series, device=head_output.device)
         distributions = self.__get_dist__(head_output)
+        if random_state is not None:
+            # Save RNG state to restore later
+            rng_state = torch.get_rng_state()
+            torch.manual_seed(random_state)
+
         for i, distribution in enumerate(distributions):
             samples[:, :, :, i] = distribution.rsample((num_samples,))
+        
+        if random_state is not None:
+            # Restore the original RNG state
+            torch.set_rng_state(rng_state)
+
         return samples
 
 class GaussianHead(BaseDistribution):
