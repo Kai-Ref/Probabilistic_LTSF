@@ -302,7 +302,7 @@ class ImplicitQuantileHead(BaseDistribution):
         self.decoding = prob_args['decoding'] # either hadamard or concat
         self.cos_embedding_dim = prob_args['cos_embedding_dim']
         if self.decoding == "hadamard":
-            self.quantile_embed_dim = 64 # prob_args['fixed_qe']
+            self.quantile_embed_dim = prob_args['fixed_qe']
             self.qr_head = nn.Linear(self.quantile_embed_dim, output_dim)
         else:
             self.quantile_embed_dim = prob_args['quantile_embed_dim'] 
