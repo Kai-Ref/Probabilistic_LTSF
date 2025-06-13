@@ -312,7 +312,7 @@ class QuantileHead(BaseDistribution):
     def forward(self, x):
         return torch.stack([layer(x) for layer in self.layers], dim=-1)
 
-    def sample(self, head_output, num_samples=1):
+    def sample(self, head_output, num_samples=1, random_state=None):
         """Uses the median quantile as the point estimate."""
         median_idx = self.quantiles.index(0.5) if 0.5 in self.quantiles else len(self.quantiles) // 2
         return head_output[..., median_idx]
@@ -384,7 +384,7 @@ class ImplicitQuantileHead(BaseDistribution):
                 predictions = predictions.permute(0, 2, 3, 1) # [batch_size, num_series, output_dim, num_quantiles]
             return predictions
     
-    def sample(self, head_output, num_samples=1):
+    def sample(self, head_output, num_samples=1, random_state=None):
         """Select the 0.5 quantile (median) if available, else fallback to the midpoint."""
         if self.training:
             return head_output[..., 0]  # Use the direct prediction during training
