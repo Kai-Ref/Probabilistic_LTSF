@@ -23,11 +23,11 @@ DATASET_NAME="ETTh1_prob"
 
 
 # DeepAR
-# MODEL_NAME="DeepAR"
-# SweepID="vgbb0kjf" #- univariate 720
+MODEL_NAME="DeepAR"
+SweepID="vgbb0kjf" #- univariate 720
 
-MODEL_NAME="DLinear"
-SweepID="6q22uza0" # multivariate 720
+# MODEL_NAME="DLinear"
+# SweepID="6q22uza0" # multivariate 720
 
 # python ~/Probabilistic_LTSF/BasicTS/experiments/hp_tuning.py -c baselines/${MODEL_NAME}/${DATASET_NAME}.py -s /home/ma/ma_ma/ma_kreffert/Probabilistic_LTSF/BasicTS/hp_tuning/${MODEL_NAME}.yaml --gpus '0'
 python ~/Probabilistic_LTSF/BasicTS/experiments/hp_tuning.py -c baselines/${MODEL_NAME}/${DATASET_NAME}.py -s ${SweepID} --gpus '0'

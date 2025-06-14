@@ -346,6 +346,9 @@ def fill_dependencies(override_config, model_name='PatchTST', data_name='ETTh1')
     if model_name == 'DeepAR':
         number_cov_features = expanded_config['MODEL.PARAM.cov_feat_size']
         expanded_config['MODEL.FORWARD_FEATURES'] = list(range(number_cov_features + 1))
+        if 'MODEL.PARAM.prob_args.fixed_qe' in expanded_config:
+            expanded_config['MODEL.PARAM.prob_args.fixed_qe'] = int(expanded_config['MODEL.PARAM.hidden_size'])
+
 
 
 
