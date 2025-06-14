@@ -31,7 +31,9 @@ DATASET_NAME="ETTm1_prob"
 # SweepID="dax8rkzl" #- multivariate 720
 
 MODEL_NAME="DLinear"
-SweepID="dsgresbt" #- multivariate 720
+# SweepID="dsgresbt" #- multivariate 720
+# SweepID="dsgresbt" #- multivariate 720
+
 
 # python ~/Probabilistic_LTSF/BasicTS/experiments/hp_tuning.py -c baselines/${MODEL_NAME}/${DATASET_NAME}.py -s /home/kreffert/Probabilistic_LTSF/BasicTS/hp_tuning/${MODEL_NAME}.yaml --gpus '0'
 python ~/Probabilistic_LTSF/BasicTS/experiments/hp_tuning.py -c baselines/${MODEL_NAME}/${DATASET_NAME}.py -s ${SweepID} --gpus '0'

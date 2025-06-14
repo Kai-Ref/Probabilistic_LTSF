@@ -31,13 +31,13 @@ MODEL_PARAM = {
     "enc_in": 7, 
     "head_type": "probabilistic",
     "distribution_type": "i_quantile",
-    "prob_individual": False, 
+    "prob_individual": True, 
     "prob_args": {'quantiles': [0.005, 0.025, 0.165, 0.25, 0.5, 0.75, 0.835, 0.975, 0.995],
                     "num_layers": 2, 
-                    "quantile_embed_dim": 64, 
-                    "cos_embedding_dim": 128,
+                    "quantile_embed_dim": 32, 
+                    "cos_embedding_dim": 32,
                     "decoding": "hadamard",
-                    "fixed_qe": 48, # used for hadamard since it needs the right dimension
+                    "fixed_qe": 96, # used for hadamard since it needs the right dimension
                     }, #[0.1, 0.25, 0.5, 0.75, 0.9],
 }
 NUM_EPOCHS = 100
