@@ -16,13 +16,13 @@ conda activate BasicTS
 
 DATASET_NAME="ETTm1_prob_quantile"
 # PatchTST
-# MODEL_NAME="PatchTST"
+MODEL_NAME="PatchTST"
 
 # iTransformer
 # MODEL_NAME="iTransformer"
 # DeepAR
-MODEL_NAME="DeepAR"
-SweepID="xjl3tqcr" #- quantile 720
+# MODEL_NAME="DeepAR"
+# SweepID="xjl3tqcr" #- quantile 720
 
 # MODEL_NAME="DLinear"
 # SweepID="cyk9i3vt" #- quantile 720
@@ -30,8 +30,8 @@ SweepID="xjl3tqcr" #- quantile 720
 
 
 
-# python ~/Probabilistic_LTSF/BasicTS/experiments/hp_tuning.py -c baselines/${MODEL_NAME}/${DATASET_NAME}.py -s /home/kreffert/Probabilistic_LTSF/BasicTS/hp_tuning/${MODEL_NAME}_quantile.yaml --gpus '0'
-python ~/Probabilistic_LTSF/BasicTS/experiments/hp_tuning.py -c baselines/${MODEL_NAME}/${DATASET_NAME}.py -s ${SweepID} --gpus '0'
+python ~/Probabilistic_LTSF/BasicTS/experiments/hp_tuning.py -c baselines/${MODEL_NAME}/${DATASET_NAME}.py -s /home/kreffert/Probabilistic_LTSF/BasicTS/hp_tuning/${MODEL_NAME}_quantile.yaml --gpus '0'
+# python ~/Probabilistic_LTSF/BasicTS/experiments/hp_tuning.py -c baselines/${MODEL_NAME}/${DATASET_NAME}.py -s ${SweepID} --gpus '0'
 
 # python ~/Probabilistic_LTSF/BasicTS/experiments/hp_tuning.py -c baselines/PatchTST/ETTh1_prob.py -s 'fd40u7me' --gpus '0, 1'
 # python ~/Probabilistic_LTSF/BasicTS/experiments/train.py -c baselines/PatchTST/ETTh1_prob.py --gpus '0'
