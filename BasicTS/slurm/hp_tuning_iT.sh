@@ -21,7 +21,8 @@ conda activate BasicTS
 DATASET_NAME="ETTm1_prob"
 # PatchTST
 MODEL_NAME="PatchTST"
-SweepID="i1asg56a" #- multivariate 720
+# SweepID="i1asg56a" #- multivariate 720
+SweepID="kzina6t5" #- univariate 720
 
 # iTransformer
 # MODEL_NAME="iTransformer"
@@ -32,7 +33,6 @@ SweepID="i1asg56a" #- multivariate 720
 # SweepID="dax8rkzl" #- multivariate 720
 
 # MODEL_NAME="DLinear"
-# SweepID="dsgresbt" #- multivariate 720
 # SweepID="dsgresbt" #- multivariate 720
 
 

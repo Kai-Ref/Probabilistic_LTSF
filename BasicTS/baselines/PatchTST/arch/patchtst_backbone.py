@@ -33,6 +33,7 @@ class PatchTST_backbone(nn.Module):
         self.stride = stride
         self.padding_patch = padding_patch
         patch_num = int((context_window - patch_len)/stride + 1)
+
         if padding_patch == 'end': # can be modified to general case
             self.padding_patch_layer = nn.ReplicationPad1d((0, stride)) 
             patch_num += 1

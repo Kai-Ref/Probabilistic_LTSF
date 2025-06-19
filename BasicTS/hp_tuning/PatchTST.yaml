@@ -72,10 +72,10 @@ parameters:
   MODEL.PARAM.head_type:
     values: ['probabilistic']
   MODEL.PARAM.distribution_type:
-    # values: ['gaussian', 'laplace', 'student_t'] #, 'flow'] # flow 
-    values: ['m_lr_gaussian']
-  MODEL.PARAM.prob_args.rank:
-    values: [7, 36, 72, 110, 180, 360, 480]
+    values: ['gaussian', 'laplace', 'student_t'] #, 'flow'] # flow 
+  #   values: ['m_lr_gaussian']
+  # MODEL.PARAM.prob_args.rank:
+  #   values: [7, 36, 72, 110, 180, 360, 480]
 
   # Basic Params
   NUM_EPOCHS:

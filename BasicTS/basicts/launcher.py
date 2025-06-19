@@ -356,6 +356,16 @@ def fill_dependencies(override_config, model_name='PatchTST', data_name='ETTh1')
             else:
                 expanded_config['MODEL.PARAM.prob_args.fixed_qe'] = 336
 
+    if model_name == 'PatchTST':
+        if 'MODEL.PARAM.prob_args.fixed_qe' in expanded_config:
+            context_window = 96 #expanded_config['MODEL.PARAM.seq_len']
+            patch_len = expanded_config['MODEL.PARAM.patch_len']
+            stride = expanded_config['MODEL.PARAM.stride']
+            patch_num = int((context_window - patch_len)/stride + 1)
+            if expanded_config['MODEL.PARAM.padding_patch'] == "end":
+                patch_num += 1
+            expanded_config['MODEL.PARAM.prob_args.fixed_qe'] = expanded_config['MODEL.PARAM.d_model'] * patch_num
+
     # specialized overrides
     # CKPT path
     keys_to_check = ['MODEL.PARAM.distribution_type', 'INPUT_LEN', 'OUTPUT_LEN'] 
