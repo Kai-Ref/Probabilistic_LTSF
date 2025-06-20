@@ -18,7 +18,7 @@ DATASET_NAME="ETTm1_prob_quantile"
 # PatchTST
 MODEL_NAME="PatchTST"
 # SweepID="w838u17f" #- multivariate 720
-SweepID="itb3qx81" #- i quantile 720
+SweepID="wpz0ulb1" #- i quantile 720
 
 # iTransformer
 # MODEL_NAME="iTransformer"
