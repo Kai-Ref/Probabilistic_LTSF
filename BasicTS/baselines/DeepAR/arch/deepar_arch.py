@@ -122,3 +122,68 @@ class DeepAR(nn.Module):
             params = torch.concat(dist_params, dim=1)[:, -len_out:, :, :]
         #reals = input_feat_full[:, -params.shape[1]:, :, :]
         return params # {"prediction": params, }#"target": reals,}# "mus": mus, "sigmas": sigmas}
+    
+    def sample_trajectories(self, history_data, future_data, num_samples=100):
+        """
+        Sample multiple trajectories from the DeepAR model.
+
+        Args:
+            history_data (torch.Tensor): Past inputs [B, L_in, N, C]
+            future_data (torch.Tensor): Future covariates [B, L_out, N, C]
+            num_samples (int): Number of samples to generate
+
+        Returns:
+            torch.Tensor: Samples of shape [num_samples, B, L_out, N]
+        """
+        self.eval()  # ensure dropout etc. are disabled
+
+        len_in = history_data.shape[1]
+        len_out = future_data.shape[1]
+        B, _, N, _ = history_data.shape
+
+        samples = []
+
+        for _ in range(num_samples):
+            history_next = None
+            sample_seq = []
+
+            # Prepare input features
+            input_feat_full = torch.cat([history_data[:, :, :, 0:1], future_data[:, :, :, 0:1]], dim=1) # B, L_in+L_out, N, 1
+            covar_feat_full = torch.cat([history_data[:, :, :, 1:], future_data[:, :, :, 1:]], dim=1)
+
+            h, c = None, None  # hidden and cell states
+
+            for t in range(1, len_in + len_out):
+                if t <= len_in:
+                    history_next = input_feat_full[:, t-1:t, :, 0:1]  # teacher forcing during history
+                else:
+                    history_next = pred.view(B, 1, N, 1)  # autoregressive sampling
+
+                embed_feat = self.input_embed(history_next)
+                covar_feat = covar_feat_full[:, t:t+1, :, :]
+
+                if self.use_ts_id:
+                    id_feat = self.id_feat.unsqueeze(0).expand(B, -1, -1).unsqueeze(1)
+                    encoder_input = torch.cat([embed_feat, covar_feat, id_feat], dim=-1)
+                else:
+                    encoder_input = torch.cat([embed_feat, covar_feat], dim=-1)
+
+                BxN, _, C = encoder_input.transpose(1, 2).reshape(B * N, -1, encoder_input.shape[-1]).shape
+                encoder_input = encoder_input.transpose(1, 2).reshape(B * N, -1, C)
+
+                if t == 1:
+                    _, (h, c) = self.encoder(encoder_input)
+                else:
+                    _, (h, c) = self.encoder(encoder_input, (h, c))
+
+                # Sample from predicted distribution
+                dist_params = self.prob_head(F.relu(h[-1]))
+                pred = self.prob_head.sample(dist_params).view(B, N)
+
+                if t >= len_in:  # decoding phase
+                    sample_seq.append(pred.unsqueeze(1))  # [B, 1, N]
+
+            sample_seq = torch.cat(sample_seq, dim=1)  # [B, L_out, N]
+            samples.append(sample_seq)
+
+        return torch.stack(samples, dim=0)  # [num_samples, B, L_out, N]

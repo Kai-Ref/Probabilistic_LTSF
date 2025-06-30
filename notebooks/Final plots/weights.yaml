@@ -1,0 +1,69 @@
+ETTh1:
+  # PTST:
+  #   u: 
+  #     0: 
+  #       cfg: 
+  #   q:
+  #     0:
+  #       cfg: 
+  DLinear:
+    iq:
+      0:
+        cfg: fec29c378c74498fa6c8bc49a55d802b
+      1:
+        cfg: 628defbdfb1803a958c25f29e39544e7
+      2:
+        cfg: 7e59031295d7db4c807d3b5f9db7bc80
+      3:
+        cfg: 8c629f97c3b989e7b22ab0f92d98b82e
+    q:
+      0:
+        cfg: 4ba2f4d6dfab4cb4ff2a459e0533ae43
+      1:
+        cfg: 383f9f7a076ff99a0db15308b7f4d421
+      2:
+        cfg: a7f10e8c211a68a5aeb51fbaec3c28a5
+    m:
+      0:
+        cfg: fc30f42e732d03f01b66fe4c61a9a5f2
+      1:
+        cfg: aa5d43538e1d49f3c5367e942fdf55cb
+      2:
+        cfg: ab8ce283463444e38a4ab2c8b7fd3d83
+      3:
+        cfg: d941953ac4d381ac9deb101ed5326365
+    u:
+      0:
+        cfg: 22c6c387919d63a0b8c3899c830017fe
+      1:
+        cfg: f421fbe2c1f3d42f571a5c406f556fe9
+      2:
+        cfg: def66a26229b68fb2126cf8554566a28
+      3:
+        cfg: ba8ca6485a10429b9607d1de240a9ef3
+  DeepAR:
+    iq:
+      0:
+        cfg: 43dbede9727b8ef4497560ede2c37f67
+      1:
+        cfg: 9e89f68060978f59d3019ca8d8dd7b66
+      # 2:
+      #   cfg: f421fbe2c1f3d42f571a5c406f556fe9
+      3:
+        cfg: 1eb3f4e4d74a8b8a15bc2c9c62996a4c
+    q:
+      0:
+        cfg: d1d21565d8c0ed4dca6f9f391735e4f7
+      1:
+        cfg: bc40ec9edcf8b1bcd8f0a3725175b84f
+      2:
+        cfg: 2ad27c696897fc216064f719a8bea178
+    u:
+      0:
+        cfg: f7d0a9c9a4f592c7d2597ea802b6e624
+      # 1:
+      #   cfg: f421fbe2c1f3d42f571a5c406f556fe9
+      2:
+        cfg: 7b44d8385fad4872031c2a5b06b144c0
+      # 3:
+      #   cfg: ba8ca6485a10429b9607d1de240a9ef3

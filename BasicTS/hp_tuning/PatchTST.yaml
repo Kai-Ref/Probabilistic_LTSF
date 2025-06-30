@@ -60,7 +60,7 @@ parameters:
   MODEL.PARAM.kernel_size:
     values: [3, 7, 13, 25, 49]
   MODEL.PARAM.pe:
-    values: ['normal', 'zeros', 'zero', uniform', 'lin1d', 'exp1d', 'lin2d', 'exp2d', 'sincos', 'None']
+    values: ['normal', 'zeros', 'zero', 'uniform', 'lin1d', 'exp1d', 'lin2d', 'exp2d', 'sincos', 'None']
   MODEL.PARAM.learn_pe:
     values: [True]
   MODEL.PARAM.norm:
