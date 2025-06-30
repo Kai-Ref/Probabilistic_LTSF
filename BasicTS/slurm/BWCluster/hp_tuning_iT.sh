@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH -p gpu_a100_il  # Use the dev_gpu_4_a100 partition with A100 GPUs dev_gpu_4
 #SBATCH -n 1                   # Number of tasks (1 for single node)
-#SBATCH -t 360           # Time limit (10 minutes for debugging purposes)
+#SBATCH -t 300           # Time limit (10 minutes for debugging purposes)
 #SBATCH --mem=60000             # Memory request (adjust as needed)
 #SBATCH --gres=gpu:1           # Request 1 GPU (adjust if you need more)
 #SBATCH --cpus-per-task=16     # Number of CPUs per GPU (16 for A100)
@@ -16,15 +16,17 @@ conda activate BasicTS
 
 DATASET_NAME="ETTm1_prob"
 # PatchTST
-# MODEL_NAME="PatchTST"
+MODEL_NAME="PatchTST"
+# SweepID="i1asg56a" #- multivariate 720
+SweepID="kzina6t5" #- univariate 720
 
 # iTransformer
 # MODEL_NAME="iTransformer"
 
 
 # DeepAR
-MODEL_NAME="DeepAR"
-SweepID="dax8rkzl" #- univariate 720
+# MODEL_NAME="DeepAR"
+# SweepID="dax8rkzl" #- univariate 720
 
 # MODEL_NAME="DLinear"
 # SweepID="dsgresbt" #- multivariate 720

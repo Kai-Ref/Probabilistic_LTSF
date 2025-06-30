@@ -85,8 +85,8 @@ class DataGenerator:
         # Define distinct world behaviors
         world_functions = [
             lambda x: np.sin(0.1 * (x + self.prefix_len)),     # World 0: continues sine
-            lambda x: 0.5 * np.sin(0.2 * (x + self.prefix_len)),  # World 1: faster, smaller sine
-            lambda x: np.cos(0.1 * (x + self.prefix_len)),     # World 2: cosine
+            # lambda x: 0.5 * np.sin(0.2 * (x + self.prefix_len)),  # World 1: faster, smaller sine
+            lambda x: -np.cos(0.1 * (x + self.prefix_len)),     # World 2: cosine
             lambda x: np.sin(0.1 * (x + self.prefix_len) + np.pi / 4),  # World 3: phase-shifted sine
             lambda x: np.zeros_like(x),                # World 4: flattens out
         ]
@@ -157,7 +157,7 @@ class ForecastModels:
             sigma = torch.exp(log_sigma.clamp(-5, 5))
             return mu, sigma, hidden
             
-        def forecast(self, initial_sequence, steps, use_mean=False, num_samples=10):
+        def forecast(self, initial_sequence, steps, use_mean=False, num_samples=10, random_state=42):
             """
             Generate multi-step forecast starting from initial_sequence.
             
@@ -194,7 +194,8 @@ class ForecastModels:
                             next_val = mu
                         else:
                             # Sample from normal distribution
-                            next_val = torch.normal(mu, sigma)
+                            # g = torch.Generator().manual_seed(random_state).to(mu.device)  # Replace 42 with your desired seed
+                            next_val = torch.normal(mu, sigma)#, generator=g)
                         
                         # Update input for next prediction (remove oldest, add newest)
                         # Shape of next_val: [batch_size], need to reshape to [batch_size, 1, 1]
@@ -320,6 +321,7 @@ class ForecastModels:
         # Pre-process all data at once
         print("Preparing training data...")
         inputs, targets = [], []
+        print(sequences.shape)
         for seq in tqdm(sequences):
             for t in range(len(seq) - input_len - forecast_horizon):
                 # Extract input sequence and target sequence
@@ -385,7 +387,7 @@ class ForecastModels:
                 epoch_loss += loss.item() * batch_size
             
             # Print progress
-            if epoch % 10 == 0:
+            if epoch % int(epochs/5) == 0:
                 print(f"Epoch {epoch} | Avg NLL: {epoch_loss/len(dataset):.4f}")
 
     
@@ -855,6 +857,7 @@ class MultiWorldExperiment:
         
         # Create and train IMS model
         self.model_ims = ForecastModels.IMSLSTM(hidden_size=64).to(self.device)
+        print(self.forecast_horizon)
         ForecastModels.train_ims_with_teacher_forcing(self.model_ims, self.samples, self.prefix_len, self.forecast_horizon, 
                                   epochs=ims_epochs, lr=1e-3)
         # self.model_ims = self.model_ims.to("cpu")

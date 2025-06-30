@@ -243,7 +243,7 @@ class LowRankMultivariateGaussianHead(BaseDistribution):
             # Extract data for this variable
             var_mean = mean[:, i, :]  # [batch_size, output_dim]
             var_V = V_full[:, i, :, :]  # [batch_size, output_dim, rank]
-            var_S = S_full[:, i, :, :].squeeze()  # [batch_size, output_dim] - using first output_dim slice for S
+            var_S = S_full[:, i, :, :].squeeze(-1)  # [batch_size, output_dim] - using first output_dim slice for S
             # var_S = torch.diag_embed(var_S)
             # Create distribution
             distributions.append(dist.LowRankMultivariateNormal(

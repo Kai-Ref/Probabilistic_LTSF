@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -p gpu_a100_il  # Use the dev_gpu_4_a100 partition with A100 GPUs dev_gpu_4
+#SBATCH -p gpu_h100  # Use the dev_gpu_4_a100 partition with A100 GPUs dev_gpu_4
 #SBATCH -n 1                   # Number of tasks (1 for single node)
 #SBATCH -t 360           # Time limit (10 minutes for debugging purposes)
 #SBATCH --mem=60000             # Memory request (adjust as needed)
@@ -26,7 +26,8 @@ DATASET_NAME="ETTh1_prob_quantile"
 # MODEL_NAME="iTransformer"
 # DeepAR
 MODEL_NAME="DeepAR"
-SweepID="g5z4p5bb" # iquantile
+# SweepID="g5z4p5bb" # iquantile
+SweepID="02lujanw" #- quantile 720
 
 # MODEL_NAME="DLinear"
 

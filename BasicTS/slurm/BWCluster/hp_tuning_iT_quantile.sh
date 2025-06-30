@@ -20,17 +20,20 @@ conda activate BasicTS
 
 DATASET_NAME="ETTm1_prob_quantile"
 # PatchTST
-# MODEL_NAME="PatchTST"
+MODEL_NAME="PatchTST"
+# SweepID="w838u17f" #- multivariate 720
+SweepID="wpz0ulb1" #- i quantile 720
 
 # iTransformer
 # MODEL_NAME="iTransformer"
 # DeepAR
-MODEL_NAME="DeepAR"
-# SweepID="xjl3tqcr" #- quantile 720
-SweepID="17io28iw" # iquantile
+# MODEL_NAME="DeepAR"
+# # SweepID="xjl3tqcr" #- quantile 720
+# SweepID="17io28iw" # iquantile
 
 # MODEL_NAME="DLinear"
 # SweepID="cyk9i3vt" #- quantile 720
+# SweepID="7eb4giz8" #- i quantile 720
 
 # python ~/Probabilistic_LTSF/BasicTS/experiments/hp_tuning.py -c baselines/${MODEL_NAME}/${DATASET_NAME}.py -s /home/ma/ma_ma/ma_kreffert/Probabilistic_LTSF/BasicTS/hp_tuning/${MODEL_NAME}_quantile.yaml --gpus '0'
 python ~/Probabilistic_LTSF/BasicTS/experiments/hp_tuning.py -c baselines/${MODEL_NAME}/${DATASET_NAME}.py -s ${SweepID} --gpus '0'
