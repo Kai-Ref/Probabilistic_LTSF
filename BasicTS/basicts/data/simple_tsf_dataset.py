@@ -25,7 +25,7 @@ class TimeSeriesForecastingDataset(BaseDataset):
     """
 
     def __init__(self, dataset_name: str, train_val_test_ratio: List[float], mode: str, input_len: int, output_len: int, \
-        overlap: bool = False, logger: logging.Logger = None) -> None:
+        overlap: bool = False, logger: logging.Logger = None, prefix=None) -> None:
         """
         Initializes the TimeSeriesForecastingDataset by setting up paths, loading data, and 
         preparing it according to the specified configurations.
@@ -47,9 +47,12 @@ class TimeSeriesForecastingDataset(BaseDataset):
         assert mode in ['train', 'valid', 'test'], f"Invalid mode: {mode}. Must be one of ['train', 'valid', 'test']."
         super().__init__(dataset_name, train_val_test_ratio, mode, input_len, output_len, overlap)
         self.logger = logger
-
-        self.data_file_path = f'datasets/{dataset_name}/data.dat'
-        self.description_file_path = f'datasets/{dataset_name}/desc.json'
+        if prefix is not None:
+            self.data_file_path = f'{prefix}datasets/{dataset_name}/data.dat'
+            self.description_file_path = f'{prefix}datasets/{dataset_name}/desc.json'
+        else:
+            self.data_file_path = f'datasets/{dataset_name}/data.dat'
+            self.description_file_path = f'datasets/{dataset_name}/desc.json'
         self.description = self._load_description()
         self.data = self._load_data()
 

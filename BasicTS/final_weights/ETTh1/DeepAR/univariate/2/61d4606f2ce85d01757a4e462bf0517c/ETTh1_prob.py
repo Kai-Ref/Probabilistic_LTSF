@@ -102,7 +102,8 @@ CFG.TRAIN.RESUME_TRAINING = False
 CFG.TRAIN.EARLY_STOPPING_PATIENCE = 5
 CFG.TRAIN.NUM_EPOCHS = NUM_EPOCHS
 CFG.TRAIN.CKPT_SAVE_DIR = os.path.join(
-    '/home/kreffert/Probabilistic_LTSF/BasicTS/final_weights',
+    "/pfs/data6/home/ma/ma_ma/ma_kreffert/Probabilistic_LTSF/BasicTS/final_weights" 
+    # '/home/kreffert/Probabilistic_LTSF/BasicTS/final_weights',
     f'{DATA_NAME}/{MODEL_ARCH.__name__}/univariate',
     # f'{MODEL_PARAM["distribution_type"]}_{MODEL_ARCH.__name__}',
     '_'.join([str(CFG.ENV.SEED)])

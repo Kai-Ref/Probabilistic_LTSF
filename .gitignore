@@ -98,3 +98,4 @@ wandb/
 tensorboard/
 *.tar
 extracted_files/
+*.pkl

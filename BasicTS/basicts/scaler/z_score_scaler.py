@@ -21,7 +21,7 @@ class ZScoreScaler(BaseScaler):
             By default, it is set to 0, indicating the first channel.
     """
 
-    def __init__(self, dataset_name: str, train_ratio: float, norm_each_channel: bool, rescale: bool):
+    def __init__(self, dataset_name: str, train_ratio: float, norm_each_channel: bool, rescale: bool, prefix=None):
         """
         Initialize the ZScoreScaler by loading the dataset and fitting the scaler to the training data.
 
@@ -41,10 +41,14 @@ class ZScoreScaler(BaseScaler):
         self.target_channel = 0  # assuming normalization on the first channel
 
         # load dataset description and data
-        description_file_path = f'datasets/{dataset_name}/desc.json'
+        if prefix is not None:
+            description_file_path = f'{prefix}datasets/{dataset_name}/desc.json'
+            data_file_path = f'{prefix}datasets/{dataset_name}/data.dat'
+        else:
+            description_file_path = f'datasets/{dataset_name}/desc.json'
+            data_file_path = f'datasets/{dataset_name}/data.dat'
         with open(description_file_path, 'r') as f:
             description = json.load(f)
-        data_file_path = f'datasets/{dataset_name}/data.dat'
         data = np.memmap(data_file_path, dtype='float32', mode='r', shape=tuple(description['shape']))
 
         # split data into training set based on the train_ratio
