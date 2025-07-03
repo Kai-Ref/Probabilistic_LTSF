@@ -11,8 +11,8 @@ source ~/.bashrc  # Ensure Conda is properly initialized
 #conda init
 conda activate BasicTS
 Dataset="ETTm1"
-# Model="DLinear"
 
+# Model="DLinear"
 # python ~/Probabilistic_LTSF/BasicTS/experiments/train.py -c final_weights/${Dataset}/${Model}/quantile/${Dataset}_prob_quantile.py --gpus '0'
 # python ~/Probabilistic_LTSF/BasicTS/experiments/train.py -c final_weights/${Dataset}/${Model}/i_quantile/${Dataset}_prob_quantile.py --gpus '0'
 # python ~/Probabilistic_LTSF/BasicTS/experiments/train.py -c final_weights/${Dataset}/${Model}/univariate/${Dataset}_prob.py --gpus '0'

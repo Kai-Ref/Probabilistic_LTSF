@@ -16,15 +16,15 @@ Model="DLinear"
 # python ~/Probabilistic_LTSF/BasicTS/experiments/train.py -c final_weights/${Dataset}/${Model}/quantile/${Dataset}_prob_quantile.py --gpus '0'
 # python ~/Probabilistic_LTSF/BasicTS/experiments/train.py -c final_weights/${Dataset}/${Model}/i_quantile/${Dataset}_prob_quantile.py --gpus '0'
 # python ~/Probabilistic_LTSF/BasicTS/experiments/train.py -c final_weights/${Dataset}/${Model}/univariate/${Dataset}_prob.py --gpus '0'
-# python ~/Probabilistic_LTSF/BasicTS/experiments/train.py -c final_weights/${Dataset}/${Model}/multivariate/${Dataset}_prob.py --gpus '0'
+python ~/Probabilistic_LTSF/BasicTS/experiments/train.py -c final_weights/${Dataset}/${Model}/multivariate/${Dataset}_prob.py --gpus '0'
 
-Model="DeepAR"
-# python ~/Probabilistic_LTSF/BasicTS/experiments/train.py -c final_weights/${Dataset}/${Model}/quantile/${Dataset}_prob_quantile.py --gpus '0'
-# python ~/Probabilistic_LTSF/BasicTS/experiments/train.py -c final_weights/${Dataset}/${Model}/i_quantile/${Dataset}_prob_quantile.py --gpus '0'
-python ~/Probabilistic_LTSF/BasicTS/experiments/train.py -c final_weights/${Dataset}/${Model}/univariate/${Dataset}_prob.py --gpus '0'
-
-Model="PatchTST"
+# Model="DeepAR"
 # python ~/Probabilistic_LTSF/BasicTS/experiments/train.py -c final_weights/${Dataset}/${Model}/quantile/${Dataset}_prob_quantile.py --gpus '0'
 # python ~/Probabilistic_LTSF/BasicTS/experiments/train.py -c final_weights/${Dataset}/${Model}/i_quantile/${Dataset}_prob_quantile.py --gpus '0'
 # python ~/Probabilistic_LTSF/BasicTS/experiments/train.py -c final_weights/${Dataset}/${Model}/univariate/${Dataset}_prob.py --gpus '0'
-python ~/Probabilistic_LTSF/BasicTS/experiments/train.py -c final_weights/${Dataset}/${Model}/multivariate/${Dataset}_prob.py --gpus '0'
+
+# Model="PatchTST"
+# python ~/Probabilistic_LTSF/BasicTS/experiments/train.py -c final_weights/${Dataset}/${Model}/quantile/${Dataset}_prob_quantile.py --gpus '0'
+# python ~/Probabilistic_LTSF/BasicTS/experiments/train.py -c final_weights/${Dataset}/${Model}/i_quantile/${Dataset}_prob_quantile.py --gpus '0'
+# python ~/Probabilistic_LTSF/BasicTS/experiments/train.py -c final_weights/${Dataset}/${Model}/univariate/${Dataset}_prob.py --gpus '0'
+# python ~/Probabilistic_LTSF/BasicTS/experiments/train.py -c final_weights/${Dataset}/${Model}/multivariate/${Dataset}_prob.py --gpus '0'

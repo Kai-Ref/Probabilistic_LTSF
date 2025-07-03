@@ -46,7 +46,7 @@ CFG.USE_WANDB = False
 ############################## Environment Configuration ##############################
 CFG.ENV = EasyDict()
 CFG.ENV.TF32 = False
-CFG.ENV.SEED = 4
+CFG.ENV.SEED = 2
 CFG.ENV.DETERMINISTIC = True
 CFG.ENV.CUDNN = EasyDict()
 CFG.ENV.CUDNN.ENABLED = True

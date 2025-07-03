@@ -2,73 +2,57 @@ import os
 import sys
 from easydict import EasyDict
 sys.path.append(os.path.abspath(__file__ + '/../../..'))
-
-from basicts.metrics import masked_mae, masked_mse, nll_loss, crps, Evaluator, quantile_loss, empirical_crps
+from basicts.metrics import masked_mae, masked_mse, nll_loss, crps, Evaluator, quantile_loss
 from basicts.data import TimeSeriesForecastingDataset
 from basicts.runners import SimpleProbTimeSeriesForecastingRunner, SimpleTimeSeriesForecastingRunner
 from basicts.scaler import ZScoreScaler, MinMaxScaler
 from basicts.utils import get_regular_settings
 
-from baselines.PatchTST.arch import PatchTST
+from baselines.DeepAR.arch import DeepAR
+# from .runner import DeepARRunner
+# from .loss import gaussian_loss
 
 ############################## Hot Parameters ##############################
 # Dataset & Metrics configuration
-DATA_NAME = 'ETTm1'  # Dataset name
+DATA_NAME = 'ETTm1'  # Dataset name (unchanged)
 regular_settings = get_regular_settings(DATA_NAME)
-INPUT_LEN = 96
-OUTPUT_LEN = 720
-TRAIN_VAL_TEST_RATIO = regular_settings['TRAIN_VAL_TEST_RATIO']
-NORM_EACH_CHANNEL = False
-RESCALE = True
-NULL_VAL = regular_settings['NULL_VAL']
+INPUT_LEN = 96 #regular_settings['INPUT_LEN']  # Length of input sequence (unchanged)
+OUTPUT_LEN = 720  # Updated
+TRAIN_VAL_TEST_RATIO = regular_settings['TRAIN_VAL_TEST_RATIO']  # Train/Validation/Test split ratios (unchanged)
+NORM_EACH_CHANNEL = True  # Updated (already True)
+RESCALE = True  # Updated (already True)
+NULL_VAL = regular_settings['NULL_VAL']  # Null value in the data (unchanged)
 
 # Model architecture and parameters
-MODEL_ARCH = PatchTST
-NUM_NODES = 7
+MODEL_ARCH = DeepAR
 MODEL_PARAM = {
-    "enc_in": NUM_NODES,
-    "seq_len": INPUT_LEN,
-    "pred_len": OUTPUT_LEN,
-    "e_layers": 7,
-    "n_heads": 8,
-    "d_model": 8,
-    "d_ff": 128,
-    "dropout": 0.06525492609571369,
-    "fc_dropout": 0.1504737597258348,
-    "head_dropout": 0.09134423513978072,
-    "patch_len": 32,
-    "stride": 64,
-    "individual": 0,
-    "padding_patch": "None",
-    "revin": 1,
-    "affine": 1,
-    "subtract_last": 1,
-    "decomposition": 1,
-    "kernel_size": 25,
-    "head_type": "probabilistic",
-    "distribution_type": "m_lr_gaussian",
-    "prob_args": {
-        "rank": 110
-    },
-    "act": "gelu",
-    "attn_dropout": 0.39415105874004674,
-    "learn_pe": True,
-    "norm": "BatchNorm",
-    "pe": "lin2d",
-    "pre_norm": True
+    'cov_feat_size': 0,  # Updated
+    'embedding_size': 16,  # Updated from 128 to 16
+    'hidden_size': 16,  # Updated from 32 to 16
+    'num_layers': 8,  # Unchanged
+    'use_ts_id': True,  # Unchanged
+    'id_feat_size': 128,  # Updated from 8 to 128
+    'num_nodes': 7,  # Unchanged
+    "distribution_type": "laplace",  # Updated from "student_t" to "laplace"
+    "prob_args": {},
 }
-NUM_EPOCHS = 100
+NUM_EPOCHS = 100  # Unchanged
 
 ############################## General Configuration ##############################
 CFG = EasyDict()
+# General settings
 CFG.DESCRIPTION = 'An Example Config'
 CFG.GPU_NUM = 1
+# Runner
 CFG.RUNNER = SimpleProbTimeSeriesForecastingRunner
+
 CFG.USE_WANDB = False
+
 ############################## Environment Configuration ##############################
 CFG.ENV = EasyDict()
+# GPU and random seed settings
 CFG.ENV.TF32 = False
-CFG.ENV.SEED = 1
+CFG.ENV.SEED = 3
 CFG.ENV.DETERMINISTIC = True
 CFG.ENV.CUDNN = EasyDict()
 CFG.ENV.CUDNN.ENABLED = True
@@ -88,7 +72,7 @@ CFG.DATASET.PARAM = EasyDict({
 
 ############################## Scaler Configuration ##############################
 CFG.SCALER = EasyDict()
-CFG.SCALER.TYPE = MinMaxScaler
+CFG.SCALER.TYPE = MinMaxScaler  # Updated (already MinMaxScaler)
 CFG.SCALER.PARAM = EasyDict({
     'dataset_name': DATA_NAME,
     'train_ratio': TRAIN_VAL_TEST_RATIO[0],
@@ -98,7 +82,7 @@ CFG.SCALER.PARAM = EasyDict({
 
 ############################## Model Configuration ##############################
 CFG.MODEL = EasyDict()
-CFG.MODEL.NAME = MODEL_ARCH.__name__
+CFG.MODEL.NAME = MODEL_ARCH.__name__  # "DeepAR"
 CFG.MODEL.ARCH = MODEL_ARCH
 CFG.MODEL.PARAM = MODEL_PARAM
 CFG.MODEL.FORWARD_FEATURES = [0]
@@ -106,61 +90,60 @@ CFG.MODEL.TARGET_FEATURES = [0]
 
 ############################## Metrics Configuration ##############################
 CFG.METRICS = EasyDict()
-all_metrics = ["MSE", "abs_error", "abs_target_sum", "abs_target_mean",
-               "MAPE", "sMAPE", "MASE", "RMSE", "NRMSE", "ND", "weighted_ND",
-               "mean_absolute_QuantileLoss", "CRPS", "MAE_Coverage", "NLL"]
-CFG.METRICS.FUNCS = EasyDict({
-    'NLL': nll_loss,
-    'CRPS': crps,
-    # 'Evaluator': Evaluator(distribution_type=MODEL_PARAM['distribution_type'], 
-    #                        quantiles=MODEL_PARAM['quantiles']),
-    # 'Val_Evaluator': Evaluator(distribution_type=MODEL_PARAM['distribution_type'], metrics = all_metrics,
-    #                         quantiles=MODEL_PARAM['prob_args']['quantiles']),  # only use the evaluator during validation/testing iters
-})
+CFG.METRICS.FUNCS = EasyDict({'NLL': nll_loss,
+                              'CRPS': crps,
+                              })
 CFG.METRICS.TARGET = 'NLL'
 CFG.METRICS.NULL_VAL = NULL_VAL
 
 ############################## Training Configuration ##############################
 CFG.TRAIN = EasyDict()
-CFG.TRAIN.RESUME_TRAINING = False
+CFG.TRAIN.RESUME_TRAINING = False  # Updated (already False)
 CFG.TRAIN.EARLY_STOPPING_PATIENCE = 5
 CFG.TRAIN.NUM_EPOCHS = NUM_EPOCHS
+
 CFG.TRAIN.CKPT_SAVE_DIR = os.path.join(
     '/home/kreffert/Probabilistic_LTSF/BasicTS/final_weights',
-    f'{DATA_NAME}/{MODEL_ARCH.__name__}/multivariate',
+    f'{DATA_NAME}/{MODEL_ARCH.__name__}/univariate',
     '_'.join([str(CFG.ENV.SEED)])
 )
 CFG.TRAIN.LOSS = nll_loss
+
+# Optimizer settings
 CFG.TRAIN.OPTIM = EasyDict()
-CFG.TRAIN.OPTIM.TYPE = "Adam"
+CFG.TRAIN.OPTIM.TYPE = "Adam"  # Updated (already "Adam")
 CFG.TRAIN.OPTIM.PARAM = {
-    "lr": 0.009549589473700158,
-    "weight_decay": 0.00005254062114351919,
+    'lr': 0.009219487711265484,  # Updated from 0.01120632065230968
+    "weight_decay": 0.0009510616953480284,  # Updated from 0.0006552434086191572
 }
+
+# Learning rate scheduler settings
 CFG.TRAIN.LR_SCHEDULER = EasyDict()
-CFG.TRAIN.LR_SCHEDULER.TYPE = "MultiStepLR"
+CFG.TRAIN.LR_SCHEDULER.TYPE = "MultiStepLR"  # Unchanged
 CFG.TRAIN.LR_SCHEDULER.PARAM = {
-    "milestones": [1, 25],
-    "gamma": 0.4881375147395092
+    "milestones": [5, 25],
+    "gamma": 0.4028669112665537  # Updated from 0.6703581388363418
 }
 CFG.TRAIN.CLIP_GRAD_PARAM = {
     'max_norm': 5.0
 }
+
+# Train data loader settings
 CFG.TRAIN.DATA = EasyDict()
-CFG.TRAIN.DATA.BATCH_SIZE = 64
+CFG.TRAIN.DATA.BATCH_SIZE = 16  # Updated from 128
 CFG.TRAIN.DATA.SHUFFLE = True
 
 ############################## Validation Configuration ##############################
 CFG.VAL = EasyDict()
 CFG.VAL.INTERVAL = 1
 CFG.VAL.DATA = EasyDict()
-CFG.VAL.DATA.BATCH_SIZE = 64
+CFG.VAL.DATA.BATCH_SIZE = 128  # Unchanged
 
 ############################## Test Configuration ##############################
 CFG.TEST = EasyDict()
 CFG.TEST.INTERVAL = 1
 CFG.TEST.DATA = EasyDict()
-CFG.TEST.DATA.BATCH_SIZE = 64
+CFG.TEST.DATA.BATCH_SIZE = 128  # Unchanged
 
 ############################## Evaluation Configuration ##############################
 CFG.EVAL = EasyDict()
