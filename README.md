@@ -1,4 +1,4 @@
-# Machine Learning Project Template
+# Probabilistic LTSF: Investigating a DMS-IMS Trade-off
 
 Machine learning projects can be extraordinarily complex involving data collection, preprocessing, model training, model evaluation, as well as visualization and reporting. Often, the starting point for many is to use Jupyter Notebooks, which are excellent for trying out new ideas and exploring data, but fall short as the project becomes larger as often this results in long, labyrinthine files.
 
@@ -6,49 +6,58 @@ This repo is an example machine learning project file structure that runs fully 
 
 Let's start by introducing the recommended file structure, then discuss each piece and why it's included. Below, files are shown first and folders after denoted with a `/` appended such as `folder/`.
 
-## Recommended file structure
+## File structure
 ```
-├── README.md          <- The top-level README for developers using this project
-├── Makefile           <- Makefile with commands like `make data` or `make train`
-├── config.yml         <- Configuration file
-├── requirements.txt   <- The requirements file for reproducing the environment
-├── .gitignore         <- Git ignore file
-├── LICENSE
-├── data/
-│   ├── raw/           <- The original, immutable data dump
-│   ├── interim/       <- Intermediate data that has been transformed
-│   └── processed/     <- The final, canonical data sets for modeling
-│
-├── docs/              <- Any descriptors of your data or models
-│
-├── models/            <- Trained models (so you don't have to rerun them)
-│
-├── notebooks/         <- Jupyter notebooks for temporary EDA, exploration, etc.
-│
-├── reports/           <- Generated analysis as HTML, PDF, LaTeX, etc.
-│   └── figures/       <- Generated graphics and figures to be used in reporting
-│
-├── results/           <- Saved model outputs and/or metrics
-│
-└── src/               <- Source code for use in this project
-    ├── __init__.py    <- Makes src a Python module
+├── README.md              <- The top-level README for developers using this project
+├── requirements.txt       <- The requirements file for reproducing the environment
+├── .gitignore             <- Git ignore file
+├── BasicTS/               <- The cloned repository from BasicTS+
+    ├── baselines/         <- The source code and configs of all models
     │
-    ├── data/          <- Scripts to download or generate data
-    │   └── make_dataset.py
+    ├── basicts/           <- Contains the pipeline
+    │   ├── data/          <- Dataset loaders
+    │   ├── metrics/       <- Evaluation and Training metrics
+    │   ├── runners/       <- Pipeline runners
+    │   ├── scaler/        <- Scalers
+    │   ├── utils/         
+    │   └── launcher.py    <- Entry point for training, hpo and testing
     │
-    ├── preprocess/    <- Scripts to turn raw data into features for modeling
-    │   └── build_features.py
+    ├── examples/          <- Example configs from BasicTS
     │
-    ├── model/         <- Scripts to train models and apply models  
-    │   ├── predict_model.py
-    │   └── train_model.py
+    ├── experiments/       <- .py scripts for training, hpo and testing
     │
-    ├── evaluate/      <- Scripts to validate and apply the model to data  
+    ├── final_weights/     <- Config files from the best model runs after hpo
+    │   ├── ETTh1/         
+    │   └── ETTm1/
     │
-    ├── visualization/ <- Scripts to create exploratory and results oriented visualizations
-    │   └── visualize.py
+    ├── hp_tuning/         <- .yaml files for the hyperparameter optimization
+    │   ├── ETTh1/         
+    │   └── ETTm1/ 
     │
-    └── common/        <- Scripts shared among other modules
+    ├── prob/              <- Added probabilistic heads
+    │
+    ├── scripts/           <- Initial scripts to get BasicTS+ project started
+    │
+    ├── slurm/             <- Slurm scripts used throughout this project
+    │
+    ├── tests/             <- Test from BasicTS+
+    │
+    └── tutorial/          <- .md Tutorials from BasicTS+
+│
+├── ProbTS/                <- Initally used ProbTS, but switched to BasicTS due to more models/datasets
+│
+├── notebooks/             <- Jupyter notebooks used in this project
+    ├── BasicTS/           <- The source code and configs of all models
+    │
+    ├── Final plots/       <- Contains the pipeline
+    │
+    ├── experiments/       <- .py scripts for training, hpo and testing
+    │
+    └── experiments/       <- Config files from the best model runs after hpo
+│
+├── notes/                 <- Generated analysis as HTML, PDF, LaTeX, etc.
+│
+└── figures/               <- Figures used in report
 ```
 
 ## `READEME.md`
