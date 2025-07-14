@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import os
-# os.chdir('/home/kreffert/Probabilistic_LTSF/BasicTS/')
-os.chdir('/pfs/data6/home/ma/ma_ma/ma_kreffert/Probabilistic_LTSF/BasicTS/')
+os.chdir('/home/kreffert/Probabilistic_LTSF/BasicTS/')
+# os.chdir('/pfs/data6/home/ma/ma_ma/ma_kreffert/Probabilistic_LTSF/BasicTS/')
 from basicts.data import TimeSeriesForecastingDataset
 from basicts.utils import get_regular_settings
 from basicts.scaler import ZScoreScaler, MinMaxScaler
@@ -18,7 +18,7 @@ def load_data():
                     'train_val_test_ratio': TRAIN_VAL_TEST_RATIO,
                     'input_len': 96,
                     'output_len': 720,
-                  'prefix': '/pfs/data6/home/ma/ma_ma/ma_kreffert/Probabilistic_LTSF/BasicTS/',
+                  'prefix': '/home/kreffert/Probabilistic_LTSF/BasicTS/', #'/pfs/data6/home/ma/ma_ma/ma_kreffert/Probabilistic_LTSF/BasicTS/',
         }
         data_sets[DATA_NAME] = {}
         data_sets[DATA_NAME]['train'] = TimeSeriesForecastingDataset(mode='train', **params)
@@ -33,7 +33,7 @@ def create_scalers(data_sets, scaler_type='Z_score'):
                 'train_ratio': 1,
                 'norm_each_channel': True,
                 'rescale': True,
-                 'prefix': '/pfs/data6/home/ma/ma_ma/ma_kreffert/Probabilistic_LTSF/BasicTS/',
+                 'prefix': '/home/kreffert/Probabilistic_LTSF/BasicTS/', #'/pfs/data6/home/ma/ma_ma/ma_kreffert/Probabilistic_LTSF/BasicTS/',
                  }
         if scaler_type == 'Z_score':
             scaler = ZScoreScaler(**params)

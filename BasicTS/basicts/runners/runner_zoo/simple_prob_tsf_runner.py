@@ -312,6 +312,13 @@ class SimpleProbTimeSeriesForecastingRunner(BaseTimeSeriesForecastingRunner):
             forward_return['target'] = forward_return['target'][:, :cl_length, :, :]
         
         loss = self.metric_forward(self.loss, forward_return)
+        # CRITICAL: Track gradients before optimizer step
+        # grad_norm = self.exp_tracker.track_gradients(step=iter_index)
+        
+        # # Track loss and other metrics
+        # self.exp_tracker.track_loss(loss.item(), step=iter_index)
+        # self.exp_tracker.track_learning_rate(self.optim)
+        
         self.update_epoch_meter('train/loss', loss.item())
         if self.use_wandb and iter_index % 10 == 0:
             wandb_dict = {'train/epoch': epoch, 'train/iter': iter_num, 'train/loss': loss.item()}

@@ -105,7 +105,7 @@ class ZScoreScaler(BaseScaler):
         std = self.std.to(input_data.device)
         # Clone the input data to prevent in-place modification (which is not allowed in PyTorch)
         input_data = input_data.clone()
-        if head == 'gaussian':#TODO also handle quantile normalization, i think this only normalizes the first channel...
+        if head == ['gaussian', 'laplace', 'student_t']:#TODO also handle quantile normalization, i think this only normalizes the first channel...
             input_data[..., 0] = input_data[..., 0] * std + mean
             input_data[..., 1] = input_data[..., 1] * std
         elif head in ['quantile', 'i_quantile']: # apply the scaling across all quantile levels

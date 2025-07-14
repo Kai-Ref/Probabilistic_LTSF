@@ -312,10 +312,10 @@ class QuantileHead(BaseDistribution):
     def forward(self, x):
         return torch.stack([layer(x) for layer in self.layers], dim=-1)
 
-    def sample(self, head_output, num_samples=1, random_state=None):
-        """Uses the median quantile as the point estimate."""
-        median_idx = self.quantiles.index(0.5) if 0.5 in self.quantiles else len(self.quantiles) // 2
-        return head_output[..., median_idx]
+    def sample(self, head_output, num_samples=1, random_state=None, quantile_idx=None):
+        if quantile_idx is None:
+            quantile_idx = self.quantiles.index(0.5) if 0.5 in self.quantiles else len(self.quantiles) // 2
+        return head_output[..., quantile_idx]
 
 class ImplicitQuantileHead(BaseDistribution):
     """Implicit Quantile Network (IQN) for quantile regression."""
@@ -373,43 +373,56 @@ class ImplicitQuantileHead(BaseDistribution):
             #u = self.quantiles.to(x.device).repeat(batch_size, 1)  # Fixed quantile levels for inference
             if _u is None:
                 quantile_levels = torch.tensor(self.quantiles, device=x.device).float()  # Convert to tensor
-                q2 = torch.rand(100).to(x.device)
-                quantile_levels = torch.cat([quantile_levels, q2], dim=0)
-                num_q = quantile_levels.size(0)                
-                # Repeat x for each quantile level
-                x = x.unsqueeze(1).repeat(1, num_q, 1)       # [B, num_q, input_dim]
-                x = x.view(batch_size * num_q, -1)       # [B * num_q, input_dim]
+                if False:
+                    q2 = torch.rand(100).to(x.device)
+                    quantile_levels = torch.cat([quantile_levels, q2], dim=0)
+                num_q = quantile_levels.size(0)  
+                if x.dim() == 3:
+                    B, N, D = x.shape
+                    # x = x.view(B * N, D)
+                    # x = x.unsqueeze(1).repeat(1, num_q, 1, 1)       # [B, num_q, input_dim]
+                    # x = x.view(batch_size * num_q, N, D)       # [B * num_q, input_dim]
+                    # reshape_out = True
+                    predictions = []
+                    with torch.no_grad():
+                        for tau in quantile_levels:
+                            u = torch.full((B, 1), tau, device=x.device)  # Same tau for entire batch
+                            pred = self._make_pred(u, x)
+                            predictions.append(pred)
+                    
+                    predictions = torch.stack(predictions, dim=1) # [batch_size, num_quantiles, (num_series), output_dim] -> num_series not always present, for example when individual=False
+                    if predictions.dim() == 3:
+                        predictions = predictions.permute(0, 2, 1)  # [batch_size, output_dim, num_quantiles]
+                    else:
+                        predictions = predictions.permute(0, 2, 3, 1) # [batch_size, num_series, output_dim, num_quantiles]
+                    return predictions
+                else:
+                    B = x.size(0)
+                    reshape_out = False
+                    # Repeat x for each quantile level
+                    x = x.unsqueeze(1).repeat(1, num_q, 1)       # [B, num_q, input_dim]
+                    x = x.view(batch_size * num_q, -1)       # [B * num_q, input_dim]
                 
                 # Repeat quantiles for all samples
                 u = quantile_levels.repeat(batch_size)           # [B * num_q]
                 u = u.view(-1, 1)             
                 
             else:
+                reshape_out = False
                 # _u is only really given for IMS models to have a consistent random quantile level across the prediction horizon, i.e. across multiple calls
                 num_q = _u.size(0)
 
                 # assuming the num series are simply 7
-                u = _u.repeat(batch_size*7).unsqueeze(-1) #.repeat(x.size(0)).unsqueeze(-1)  # [1400 * 109, 1]
+                u = _u.repeat(batch_size).unsqueeze(-1) #.repeat(x.size(0)).unsqueeze(-1)  # [1400 * 109, 1]
             
-            # predictions = []
-            # with torch.no_grad():
-            #     for tau in quantile_levels:
-            #         u = torch.full((x.size(0), 1), tau, device=x.device)  # Same tau for entire batch
-            #         pred = self._make_pred(u, x)
-            #         predictions.append(pred)
-            # predictions = torch.stack(predictions, dim=1) # [batch_size, num_quantiles, (num_series), output_dim] -> num_series not always present, for example when individual=False
-            # if predictions.dim() == 3:
-            #     predictions = predictions.permute(0,2,1)  # [batch_size, output_dim, num_quantiles]
-            # else:
-            #     predictions = predictions.permute(0, 2, 3, 1) # [batch_size, num_series, output_dim, num_quantiles]
-            # return predictions
-            
-            # Compute predictions
             with torch.no_grad():
                 preds = self._make_pred(u, x)            # [B * num_q, output_dim]
-            # Reshape to [B, num_q, output_dim]
-            preds = preds.view(batch_size, num_q, -1)
             
+            if reshape_out:
+                preds = preds.view(B, num_q, N, -1) 
+            else:
+                # Reshape to [B, num_q, output_dim]
+                preds = preds.view(batch_size, num_q, -1)
             # Permute to match desired output shape
             if preds.dim() == 3:
                 preds = preds.permute(0, 2, 1)               # [B, output_dim, num_q]

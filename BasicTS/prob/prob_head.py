@@ -38,7 +38,7 @@ class ProbabilisticHead(nn.Module):
     def __get_dist__(self, prediction):
         return self.head.__get_dist__(prediction)
 
-    def sample(self, head_output, num_samples=1, random_state=None):# TODO implement the functionality of sampling more than one sample -> consider desired shape of output
+    def sample(self, head_output, num_samples=1, random_state=None, **kwargs):# TODO implement the functionality of sampling more than one sample -> consider desired shape of output
         return self.head.sample(head_output, num_samples, random_state=random_state)  
 
 

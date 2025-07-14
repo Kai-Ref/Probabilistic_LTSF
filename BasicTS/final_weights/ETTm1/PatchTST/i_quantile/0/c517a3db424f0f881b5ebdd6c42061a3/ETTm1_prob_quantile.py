@@ -128,7 +128,7 @@ CFG.TRAIN.EARLY_STOPPING_PATIENCE = 5
 CFG.TRAIN.NUM_EPOCHS = NUM_EPOCHS
 CFG.TRAIN.CKPT_SAVE_DIR = os.path.join(
     '/home/kreffert/Probabilistic_LTSF/BasicTS/final_weights',
-    f'{DATA_NAME}/{MODEL_ARCH.__name__}/quantile',
+    f'{DATA_NAME}/{MODEL_ARCH.__name__}/i_quantile',
     '_'.join([str(CFG.ENV.SEED)])
 )
 CFG.TRAIN.LOSS = quantile_loss

@@ -24,6 +24,7 @@ from tqdm import tqdm
 
 from ..utils import get_dataset_name
 from . import optim
+# from prob import TrainingDifficultyTracker
 
 
 class BaseEpochRunner(metaclass=ABCMeta):
@@ -317,6 +318,9 @@ class BaseEpochRunner(metaclass=ABCMeta):
         self.train_data_loader = self.build_train_data_loader(cfg)
         self.register_epoch_meter('train/time', 'train', '{:.2f} (s)', plt=False)
 
+        # self.exp_tracker = TrainingDifficultyTracker(self.model, save_dir="/home/kreffert/Probabilistic_LTSF/training_analysis", experiment_name="deepar_training_difficulty")
+
+
         # create optim
         self.optim = self.build_optim(cfg['TRAIN.OPTIM'], self.model)
         self.logger.info('Set optim: {}'.format(self.optim))
@@ -413,6 +417,7 @@ class BaseEpochRunner(metaclass=ABCMeta):
         epoch_index = 0
         # training loop
         for epoch_index in range(self.start_epoch, self.num_epochs):
+            # self.exp_tracker.start_epoch()
             epoch = epoch_index + 1
 
             # early stopping check
@@ -433,6 +438,7 @@ class BaseEpochRunner(metaclass=ABCMeta):
                 loss = self.train_iters(epoch, iter_index, data)
                 if loss is not None:
                     self.backward(loss)
+
             # update lr_scheduler
             if self.scheduler is not None:
                 self.scheduler.step()
@@ -441,6 +447,7 @@ class BaseEpochRunner(metaclass=ABCMeta):
             # epoch time
             self.update_epoch_meter('train/time', epoch_end_time - epoch_start_time)
             self.on_epoch_end(epoch)
+            # self.exp_tracker.end_epoch()
 
             expected_end_time = train_time_predictor.get_expected_end_time(epoch)
 
@@ -453,6 +460,11 @@ class BaseEpochRunner(metaclass=ABCMeta):
         self.logger.info('The training finished at {}'.format(
             time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
         ))
+
+        # self.exp_tracker.save_data()
+        # self.exp_tracker.plot_training_analysis()
+        # report = self.exp_tracker.generate_training_report()
+        # print(report)
 
         self.on_training_end(cfg=cfg, train_epoch=epoch_index + 1)
 
